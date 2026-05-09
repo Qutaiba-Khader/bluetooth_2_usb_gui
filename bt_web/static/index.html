@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bluetooth Manager</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+            <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+          </svg>
+          <h1>Bluetooth To USB</h1>
+        </div>
+        <div id="adapter-info" class="adapter-badge">
+          <span class="adapter-dot"></span>
+          <span class="adapter-text">Loading...</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- LEFT: Network -->
+      <aside class="panel panel-net">
+        <section class="section">
+          <div class="section-head">
+            <h2>Network</h2>
+          </div>
+
+          <div id="net-status" class="net-status-card">
+            <div class="net-row"><span class="net-label">Status</span><span id="net-conn" class="net-val">--</span></div>
+            <div class="net-row"><span class="net-label">SSID</span><span id="net-ssid" class="net-val">--</span></div>
+            <div class="net-row"><span class="net-label">IP</span><span id="net-ip" class="net-val mono">--</span></div>
+            <div class="net-row"><span class="net-label">Hotspot</span><span id="net-ap" class="net-val">--</span></div>
+          </div>
+
+          <div class="section-head" style="margin-top:20px">
+            <h3>WiFi Networks</h3>
+            <button id="wifi-scan-btn" class="btn btn-ghost btn-sm" onclick="scanWifi()">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Scan
+            </button>
+          </div>
+          <div id="wifi-list" class="wifi-list">
+            <div class="empty-sm">Click Scan to find networks</div>
+          </div>
+        </section>
+      </aside>
+
+      <!-- RIGHT: Bluetooth -->
+      <div class="panel panel-bt">
+        <section class="section">
+          <div class="section-head">
+            <h2>My Devices</h2>
+            <button class="btn btn-ghost btn-sm" onclick="loadDevices()">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div id="paired-devices" class="device-grid">
+            <div class="empty">Loading devices...</div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <h2>Nearby Devices</h2>
+            <button id="scan-btn" class="btn btn-primary btn-sm" onclick="startScan()">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+              <span id="scan-text">Scan</span>
+            </button>
+          </div>
+          <div id="scan-results" class="device-grid">
+            <div class="empty">Click <strong>Scan</strong> to discover nearby Bluetooth devices</div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <div id="confirm-overlay" class="overlay hidden">
+    <div class="confirm-box">
+      <p id="confirm-msg"></p>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button>
+        <button class="btn btn-danger" id="confirm-yes">Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="wifi-overlay" class="overlay hidden">
+    <div class="confirm-box">
+      <p id="wifi-connect-title" style="font-weight:600"></p>
+      <input type="password" id="wifi-pass" class="wifi-input" placeholder="Password">
+      <div class="confirm-actions" style="margin-top:16px">
+        <button class="btn btn-ghost" onclick="closeWifiDialog()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitWifiConnect()">Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

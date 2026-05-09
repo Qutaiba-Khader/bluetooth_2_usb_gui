@@ -1,0 +1,21 @@
+#!/bin/bash
+HOTSPOT="bt2usb-hotspot"
+
+has_station() {
+    nmcli -t -f NAME,TYPE connection show --active 2>/dev/null | grep 802-11-wireless | grep -v "^${HOTSPOT}:" | grep -q .
+}
+
+hotspot_up() {
+    nmcli -t -f NAME connection show --active 2>/dev/null | grep -q "^${HOTSPOT}$"
+}
+
+case "$2" in
+    up|down|connectivity-change)
+        sleep 3
+        if has_station; then
+            hotspot_up && nmcli connection down "$HOTSPOT" 2>/dev/null
+        else
+            hotspot_up || nmcli connection up "$HOTSPOT" 2>/dev/null
+        fi
+        ;;
+esac

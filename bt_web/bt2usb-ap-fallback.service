@@ -1,0 +1,12 @@
+[Unit]
+Description=Fallback WiFi AP for Bluetooth-2-USB
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/bin/bash -c "sleep 15; nmcli -t -f NAME,TYPE connection show --active 2>/dev/null | grep 802-11-wireless | grep -v bt2usb-hotspot | grep -q . || nmcli connection up bt2usb-hotspot 2>/dev/null || true"
+
+[Install]
+WantedBy=multi-user.target
