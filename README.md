@@ -24,7 +24,7 @@ required on the target system.
 
 ## Web GUI
 
-![Bluetooth-to-USB Web GUI](assets/overview.png)
+![Bluetooth-to-USB Web GUI](assets/web_gui.jpeg)
 
 ## What this fork adds
 
