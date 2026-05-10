@@ -16,9 +16,14 @@
           </svg>
           <h1>Bluetooth To USB</h1>
         </div>
-        <div id="adapter-info" class="adapter-badge">
-          <span class="adapter-dot"></span>
-          <span class="adapter-text">Loading...</span>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div id="adapter-info" class="adapter-badge">
+            <span class="adapter-dot"></span>
+            <span class="adapter-text">Loading...</span>
+          </div>
+          <div id="device-limit" class="adapter-badge" style="display:none" title="Bluetooth devices currently connected / maximum simultaneous connections">
+            <span id="limit-text">0 / 7</span>
+          </div>
         </div>
       </div>
     </header>
@@ -74,6 +79,7 @@
               <span id="scan-text">Scan</span>
             </button>
           </div>
+          <p class="hint">Supported: keyboards, mice, and gamepads. Audio devices and phones cannot be relayed as USB HID.</p>
           <div id="scan-results" class="device-grid">
             <div class="empty">Click <strong>Scan</strong> to discover nearby Bluetooth devices</div>
           </div>

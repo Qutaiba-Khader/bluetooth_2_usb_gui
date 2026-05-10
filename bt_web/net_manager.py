@@ -39,18 +39,19 @@ class NetworkManager:
 
         ip = ""
         ssid = ""
-        signal = ""
         if wifi_con or hotspot_active:
-            dev_info = await self._run("-t", "-f", "IP4.ADDRESS,GENERAL.CONNECTION", "device", "show", "wlan0")
+            dev_info = await self._run("-t", "-f", "IP4.ADDRESS", "device", "show", "wlan0")
             for line in dev_info.splitlines():
                 if "IP4.ADDRESS" in line:
                     ip = line.split(":", 1)[-1].strip()
-                elif "GENERAL.CONNECTION" in line:
-                    ssid = line.split(":", 1)[-1].strip()
+
+        if wifi_con:
+            ssid_out = await self._run("-g", "802-11-wireless.ssid", "connection", "show", wifi_con)
+            ssid = ssid_out.strip() or wifi_con
 
         result = {
             "connected": wifi_con is not None,
-            "ssid": wifi_con or "",
+            "ssid": ssid,
             "ip": ip,
             "hotspot_active": hotspot_active,
             "hotspot_ssid": "Bluetooth To USB",
@@ -73,11 +74,14 @@ class NetworkManager:
                 if not ssid or ssid in seen or ssid == "Bluetooth To USB":
                     continue
                 seen.add(ssid)
+                active = parts[3].strip() == "*" if len(parts) > 3 else False
+                if active:
+                    continue
                 networks.append({
                     "ssid": ssid,
                     "signal": int(parts[1]) if parts[1].isdigit() else 0,
                     "security": parts[2] if len(parts) > 2 else "",
-                    "active": parts[3].strip() == "*" if len(parts) > 3 else False,
+                    "active": False,
                 })
         networks.sort(key=lambda x: x["signal"], reverse=True)
         log.info(f"[NET] Found {len(networks)} networks")

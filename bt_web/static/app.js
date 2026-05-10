@@ -10,6 +10,7 @@ const ICONS = {
 let refreshInterval = null;
 const processing = new Set();
 let pendingWifiSsid = "";
+let operationInProgress = false;
 
 async function api(path, method = "GET", body = null) {
   const opts = { method };
@@ -36,12 +37,18 @@ function deviceCard(dev, isPaired) {
   const connected = dev.connected;
   const trusted = dev.trusted;
   const busy = processing.has(dev.mac);
+  const supported = dev.supported !== false;
 
   let statusDot = "disconnected";
   let statusText = "Disconnected";
   if (busy) { statusDot = "processing"; statusText = "Processing..."; }
   else if (connected) { statusDot = "connected"; statusText = "Connected"; }
   else if (trusted) { statusDot = "trusted"; statusText = "Trusted"; }
+
+  let badge = "";
+  if (!supported) {
+    badge = `<span class="badge-unsupported">Not supported</span>`;
+  }
 
   let actions = "";
   if (busy) {
@@ -58,17 +65,24 @@ function deviceCard(dev, isPaired) {
         <button class="btn btn-danger btn-sm" onclick="confirmRemove('${dev.mac}', '${dev.name.replace(/'/g, "\\'")}')">Remove</button>`;
     }
   } else {
-    actions = `<button class="btn btn-primary btn-sm" onclick="pairDevice('${dev.mac}')">Pair</button>`;
+    if (supported) {
+      actions = `<button class="btn btn-primary btn-sm" onclick="pairDevice('${dev.mac}')">Pair</button>`;
+    } else {
+      actions = `<button class="btn btn-ghost btn-sm" disabled title="This device type is not supported">Pair</button>`;
+    }
   }
 
   return `
-    <div class="device-card ${connected ? "connected" : ""} ${busy ? "busy" : ""}" id="dev-${dev.mac.replace(/:/g, "")}">
+    <div class="device-card ${connected ? "connected" : ""} ${busy ? "busy" : ""}" id="dev-${dev.mac.replace(/:/g, "")}"
+         data-mac="${dev.mac}" data-name="${dev.name}" data-type="${dev.type}"
+         data-connected="${!!connected}" data-trusted="${!!trusted}" data-supported="${supported}">
       <div class="device-icon">${icon}</div>
       <div class="device-info">
         <div class="device-name">${dev.name}</div>
         <div class="device-meta">
           <span class="status-dot ${statusDot}"></span>
           <span class="status-label">${statusText}</span>
+          ${badge}
           <span class="device-mac">${dev.mac}</span>
         </div>
       </div>
@@ -77,13 +91,23 @@ function deviceCard(dev, isPaired) {
 }
 
 function setProcessing(mac, busy) {
-  if (busy) processing.add(mac); else processing.delete(mac);
+  if (busy) {
+    processing.add(mac);
+    operationInProgress = true;
+  } else {
+    processing.delete(mac);
+    if (processing.size === 0) operationInProgress = false;
+  }
   const id = "dev-" + mac.replace(/:/g, "");
   const el = document.getElementById(id);
   if (el) {
     const isPaired = el.parentElement.id === "paired-devices";
     const name = el.querySelector(".device-name").textContent;
-    el.outerHTML = deviceCard({ mac, name, type: "device", connected: false, trusted: false }, isPaired);
+    const type = el.dataset.type || "device";
+    const connected = el.dataset.connected === "true";
+    const trusted = el.dataset.trusted === "true";
+    const supported = el.dataset.supported !== "false";
+    el.outerHTML = deviceCard({ mac, name, type, connected, trusted, supported }, isPaired);
   }
 }
 
@@ -106,10 +130,18 @@ async function loadAdapter() {
     const text = document.querySelector(".adapter-text");
     dot.classList.toggle("on", info.powered);
     text.textContent = info.powered ? `${info.name} — ${info.address}` : "Adapter Off";
+
+    const limitEl = document.getElementById("device-limit");
+    const limitText = document.getElementById("limit-text");
+    const count = info.connected_count || 0;
+    const max = info.max_connected || 7;
+    limitText.textContent = `${count} / ${max} connected`;
+    limitEl.style.display = "flex";
   } catch { document.querySelector(".adapter-text").textContent = "Unavailable"; }
 }
 
 async function loadDevices() {
+  if (operationInProgress) return;
   const c = document.getElementById("paired-devices");
   try {
     const data = await api("/devices");
@@ -151,10 +183,10 @@ async function pairDevice(mac) {
   toast("Pairing... If prompted, confirm on the device.", "info");
   try {
     const r = await api(`/pair/${mac}`, "POST");
-    if (r.success) { toast("Paired and connected!", "success"); removeFromNearby(mac); loadDevices(); }
+    if (r.success) { toast("Paired and connected!", "success"); removeFromNearby(mac); }
     else toast("Pairing failed: " + (r.message || "Unknown error"), "error");
   } catch { toast("Pairing request failed", "error"); }
-  finally { setProcessing(mac, false); }
+  finally { setProcessing(mac, false); loadDevices(); loadAdapter(); }
 }
 
 async function connectDevice(mac) {
@@ -163,13 +195,13 @@ async function connectDevice(mac) {
     const r = await api(`/connect/${mac}`, "POST");
     toast(r.success ? "Connected" : "Connection failed", r.success ? "success" : "error");
   } catch { toast("Connection request failed", "error"); }
-  finally { setProcessing(mac, false); loadDevices(); }
+  finally { setProcessing(mac, false); loadDevices(); loadAdapter(); }
 }
 
 async function disconnectDevice(mac) {
   setProcessing(mac, true);
   try { await api(`/disconnect/${mac}`, "POST"); toast("Disconnected", "info"); }
-  finally { setProcessing(mac, false); loadDevices(); }
+  finally { setProcessing(mac, false); loadDevices(); loadAdapter(); }
 }
 
 async function trustDevice(mac) {
@@ -189,7 +221,7 @@ async function removeDevice(mac) {
   closeConfirm();
   setProcessing(mac, true);
   try { await api(`/device/${mac}`, "DELETE"); toast("Device removed", "info"); }
-  finally { setProcessing(mac, false); loadDevices(); }
+  finally { setProcessing(mac, false); loadDevices(); loadAdapter(); }
 }
 
 // --- Network ---
@@ -277,7 +309,11 @@ async function submitWifiConnect() {
 
 function startAutoRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
-  refreshInterval = setInterval(() => { loadDevices(); loadNetStatus(); }, 10000);
+  refreshInterval = setInterval(() => {
+    loadDevices();
+    loadNetStatus();
+    loadAdapter();
+  }, 10000);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

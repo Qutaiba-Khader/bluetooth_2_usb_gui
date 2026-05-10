@@ -4,9 +4,18 @@ import re
 
 log = logging.getLogger("bt_manager")
 
+MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+HID_UUID = "00001812-0000-1000-8000-00805f9b34fb"
+MAX_CONNECTED = 7
+
 
 def _strip_ansi(text):
-    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+    return ANSI_RE.sub("", text)
+
+
+def _is_hid_supported(device_type):
+    return device_type in ("keyboard", "mouse", "gamepad", "device")
 
 
 class BluetoothManager:
@@ -19,7 +28,7 @@ class BluetoothManager:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             log.warning(f"[CMD] Timed out after {timeout}s: {cmd}")
             proc.kill()
@@ -30,7 +39,7 @@ class BluetoothManager:
             log.debug(f"[CMD] Output: {out[:500]}")
         return out
 
-    async def _interactive(self, commands, timeout=45):
+    async def _interactive(self, commands):
         log.info(f"[SESSION] Starting interactive bluetoothctl ({len(commands)} steps)")
         proc = await asyncio.create_subprocess_exec(
             "bluetoothctl",
@@ -38,7 +47,6 @@ class BluetoothManager:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        output_chunks = []
 
         async def send(cmd, delay=0.5):
             log.info(f"[SESSION] >>> {cmd}  (wait {delay}s)")
@@ -74,7 +82,7 @@ class BluetoothManager:
             if m and m.group(1) not in seen:
                 seen.add(m.group(1))
                 name = m.group(2).strip()
-                if not name or name == m.group(1):
+                if not name:
                     name = "Unknown Device"
                 devices.append({"mac": m.group(1), "name": name})
         return devices
@@ -94,7 +102,7 @@ class BluetoothManager:
                 info[key] = val
         return info
 
-    def _device_type(self, icon):
+    def _device_type(self, icon, uuids=None):
         icon = str(icon).lower()
         if "keyboard" in icon:
             return "keyboard"
@@ -104,42 +112,49 @@ class BluetoothManager:
             return "audio"
         if "phone" in icon:
             return "phone"
-        if any(x in icon for x in ("input", "gaming", "gamepad")):
+        if any(x in icon for x in ("gaming", "gamepad")):
             return "gamepad"
+        if "input" in icon:
+            return "keyboard"
         return "device"
 
+    def _resolve_name(self, name, mac, alias=""):
+        if alias and not MAC_RE.match(alias.replace("-", ":")):
+            return alias
+        if name and not MAC_RE.match(name.replace("-", ":")):
+            return name
+        return mac
+
     async def get_adapter(self):
-        log.info("[ADAPTER] Getting adapter info")
         output = await self._run("show")
         info = self._parse_info(output)
-        result = {
+        return {
             "name": info.get("name", "Unknown"),
             "address": info.get("controller", ""),
             "powered": info.get("powered", False),
-            "discoverable": info.get("discoverable", False),
+            "max_connected": MAX_CONNECTED,
         }
-        log.info(f"[ADAPTER] {result}")
-        return result
 
     async def get_device_info(self, mac):
         output = await self._run("info", mac)
         return self._parse_info(output)
 
     async def get_paired_devices(self):
-        log.info("[DEVICES] Loading paired devices")
         output = await self._run("devices", "Paired")
         devices = self._parse_device_list(output)
         connected = await self._get_connected_macs()
-        log.info(f"[DEVICES] {len(devices)} paired, {len(connected)} connected")
 
         result = []
         for d in devices:
             info = await self.get_device_info(d["mac"])
+            d["name"] = self._resolve_name(
+                str(info.get("name", "")), d["mac"], str(info.get("alias", ""))
+            )
             d["connected"] = d["mac"] in connected
             d["trusted"] = info.get("trusted", False)
-            d["icon"] = str(info.get("icon", ""))
-            d["type"] = self._device_type(info.get("icon", ""))
-            log.info(f"[DEVICES]   {d['name']} ({d['mac']}) connected={d['connected']} trusted={d['trusted']}")
+            dtype = self._device_type(info.get("icon", ""))
+            d["type"] = dtype
+            d["supported"] = _is_hid_supported(dtype)
             result.append(d)
         return result
 
@@ -147,9 +162,21 @@ class BluetoothManager:
         output = await self._run("devices", "Connected")
         return {d["mac"] for d in self._parse_device_list(output)}
 
+    async def get_relay_count(self):
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "bluetooth_2_usb", "--list", "--output", "json",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        except Exception:
+            return 0
+        return stdout.decode().count('"relay"')
+
     async def scan(self, duration=8):
-        log.info(f"[SCAN] Starting {duration}s scan")
         await self._run("--timeout", str(duration), "scan", "on", timeout=duration + 5)
+        await asyncio.sleep(1)
         output = await self._run("devices")
         all_devices = self._parse_device_list(output)
         paired_output = await self._run("devices", "Paired")
@@ -159,61 +186,49 @@ class BluetoothManager:
         for d in all_devices:
             if d["mac"] not in paired_macs:
                 info = await self.get_device_info(d["mac"])
-                d["type"] = self._device_type(info.get("icon", ""))
+                d["name"] = self._resolve_name(
+                    str(info.get("name", "")), d["mac"], str(info.get("alias", ""))
+                )
+                dtype = self._device_type(info.get("icon", ""))
+                d["type"] = dtype
+                d["supported"] = _is_hid_supported(dtype)
                 nearby.append(d)
-
-        log.info(f"[SCAN] Found {len(nearby)} nearby unpaired devices")
-        for d in nearby:
-            log.info(f"[SCAN]   {d['name']} ({d['mac']}) type={d['type']}")
         return nearby
 
     async def pair_and_trust(self, mac):
         log.info(f"[PAIR] ========== START pair flow for {mac} ==========")
 
-        # Step 1: Clean slate — remove any stale state
-        log.info(f"[PAIR] Step 1/4: Removing stale state")
+        log.info("[PAIR] Step 1: Removing stale state")
         await self._run("remove", mac, timeout=5)
         await asyncio.sleep(2)
 
-        # Step 2: Single interactive session that does everything in order:
-        #   - power on, pairable on (bluetooth_2_usb disables this!)
-        #   - register NoInputNoOutput agent for BLE Just Works pairing
-        #   - scan to rediscover the device
-        #   - pair, trust, connect
-        log.info(f"[PAIR] Step 2/4: Interactive session (agent + pairable + scan + pair)")
+        log.info("[PAIR] Step 2: Interactive session (agent + pairable + scan + pair)")
         output = await self._interactive([
             ("power on",              0.5),
             ("pairable on",           0.5),
             ("agent NoInputNoOutput", 0.5),
             ("default-agent",         0.5),
-            ("scan on",               5),       # wait 5s for BLE device to advertise
-            (f"pair {mac}",           15),       # BLE pairing can take time
+            ("scan on",               5),
+            (f"pair {mac}",           15),
             ("scan off",              1),
             (f"trust {mac}",          1),
             (f"connect {mac}",        5),
         ])
 
-        # Step 3: Verify
-        log.info(f"[PAIR] Step 3/4: Verifying result")
+        log.info("[PAIR] Step 3: Verifying result")
         info = await self.get_device_info(mac)
         paired = info.get("paired", False)
         bonded = info.get("bonded", False)
-        connected = info.get("connected", False)
-        trusted = info.get("trusted", False)
-        log.info(f"[PAIR] State: paired={paired} bonded={bonded} connected={connected} trusted={trusted}")
+        log.info(f"[PAIR] paired={paired} bonded={bonded}")
 
-        # Step 4: Result
         if paired or bonded:
             log.info(f"[PAIR] ========== SUCCESS for {mac} ==========")
             return {"success": True, "message": "Paired, trusted, and connected"}
 
-        # Try to extract a useful error message
         error_msg = "Pairing failed. Make sure the device is in pairing mode and try again."
         for line in output.splitlines():
             if "Failed to pair" in line:
-                clean = _strip_ansi(line).strip()
-                # Remove bluetoothctl prompt noise
-                clean = re.sub(r"^.*?Failed", "Failed", clean)
+                clean = re.sub(r"^.*?Failed", "Failed", _strip_ansi(line).strip())
                 if clean:
                     error_msg = clean
                 break
@@ -223,10 +238,17 @@ class BluetoothManager:
 
     async def connect(self, mac):
         log.info(f"[CONNECT] Connecting to {mac}")
-        output = await self._run("connect", mac, timeout=15)
-        ok = any(x in output.lower() for x in ("successful", "connected"))
-        log.info(f"[CONNECT] success={ok}")
-        return {"success": ok, "message": output}
+        for attempt in range(2):
+            output = await self._run("connect", mac, timeout=15)
+            ok = any(x in output.lower() for x in ("successful", "connected"))
+            if ok:
+                log.info(f"[CONNECT] success on attempt {attempt + 1}")
+                return {"success": True, "message": "Connected"}
+            if attempt == 0:
+                log.info("[CONNECT] First attempt failed, retrying in 2s")
+                await asyncio.sleep(2)
+        log.warning(f"[CONNECT] Failed after 2 attempts")
+        return {"success": False, "message": output}
 
     async def disconnect(self, mac):
         log.info(f"[DISCONNECT] {mac}")
@@ -242,5 +264,4 @@ class BluetoothManager:
         log.info(f"[REMOVE] {mac}")
         await self._run("disconnect", mac)
         output = await self._run("remove", mac)
-        log.info(f"[REMOVE] Done: {output[:200]}")
         return {"success": True, "message": output}

@@ -32,7 +32,10 @@ async def index():
 
 @app.get("/api/adapter")
 async def adapter():
-    return await bt.get_adapter()
+    info = await bt.get_adapter()
+    connected = await bt._get_connected_macs()
+    info["connected_count"] = len(connected)
+    return info
 
 
 @app.get("/api/devices")

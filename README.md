@@ -1,18 +1,30 @@
 <!-- omit in toc -->
 # Bluetooth-to-USB HID Bridge for Raspberry Pi — with Web GUI
 
-![Bluetooth-to-USB HID bridge overview for Raspberry Pi](assets/overview.png)
+```
+     ┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
+     │  🎮 Gamepad      │         │                  │         │                  │
+     │  ⌨️  Keyboard     │───BT───▶│   Raspberry Pi   │───USB──▶│   Target Host    │
+     │  🖱️ Mouse        │         │   (HID Bridge)   │         │  (PC / Console)  │
+     └──────────────────┘         └──────────────────┘         └──────────────────┘
+       Bluetooth Input              Converts BT → USB            Sees standard USB
+       (wireless)                   keyboard & mouse             keyboard & mouse
+```
 
-A fork of [quaxalber/bluetooth_2_usb](https://github.com/quaxalber/bluetooth_2_usb) that adds a **web-based management GUI**, **fallback WiFi AP**, and **boot optimizations**.
+A fork of [quaxalber/bluetooth_2_usb](https://github.com/quaxalber/bluetooth_2_usb) that adds a **web-based management GUI**, **fallback WiFi AP**, **gamepad-to-keyboard mapping**, and **boot optimizations**.
 
-Use Bluetooth keyboards and mice in BIOS and boot menus, installers, kiosks,
+Use Bluetooth keyboards, mice, and gamepads in BIOS and boot menus, installers, kiosks,
 tablets, KVM setups, retro systems, consoles, and other hosts where Bluetooth
 is unavailable or inconvenient.
 
 Bluetooth-2-USB turns a Raspberry Pi into a USB HID bridge for Bluetooth
-keyboards and mice. To the target host, the Pi appears as a standard wired USB
+devices. To the target host, the Pi appears as a standard wired USB
 keyboard and mouse — no Bluetooth support, pairing flow, or special drivers
 required on the target system.
+
+## Web GUI
+
+![Bluetooth-to-USB Web GUI](assets/overview.png)
 
 ## What this fork adds
 
@@ -20,12 +32,27 @@ required on the target system.
 | --- | --- |
 | **Web GUI** | Manage Bluetooth devices from a browser — scan, pair, connect, disconnect, remove. Accessible at `http://<pi-ip>:8080` |
 | **Network management** | View WiFi status, scan and connect to networks, all from the web UI |
-| **Fallback WiFi AP** | When no known WiFi is available, the Pi creates a hotspot (`Bluetooth To USB` / password `1111111111`) so you can always reach the web UI |
-| **Multi-device support** | Pair and relay multiple Bluetooth HID devices simultaneously |
+| **Fallback WiFi AP** | When no known WiFi is available, the Pi creates a hotspot so you can always reach the web UI |
+| **Multi-device support** | Pair and relay multiple Bluetooth HID devices simultaneously (up to 7) |
+| **Gamepad support** | Xbox/PS controllers mapped to keyboard keys (A→Enter, B→Escape, X→Space, etc.) |
 | **Auto-connect** | Paired devices are automatically trusted — they reconnect when in range |
 | **BLE pairing agent** | Proper `NoInputNoOutput` agent registration for BLE device pairing |
-| **Boot optimizations** | Disables unnecessary services (cloud-init, wait-online, etc.) — reduces boot time by ~10 seconds |
+| **Unsupported device detection** | Audio devices and phones are flagged as unsupported in the UI |
+| **Boot optimizations** | Disables unnecessary services — reduces boot time by ~10 seconds |
 | **Processing indicators** | Visual feedback during pair/connect operations with spinner states |
+
+## Prerequisites
+
+- **Raspberry Pi** Zero W, Zero 2 W, 4B, or 5
+- **OS**: Raspberry Pi OS Bookworm or newer
+- **Internet** access during installation
+- **USB cable** that supports data (not charge-only)
+- One or more **Bluetooth HID devices** (keyboard, mouse, or gamepad)
+
+> [!NOTE]
+> Pi 3 models include Bluetooth but do not expose a suitable device-mode USB port.
+> On **Pi 4B / 5**, the OTG-capable port is the USB-C power port.
+> On **Pi Zero** boards, the OTG-capable port is the USB data port (not the power-only port).
 
 ## Quick start
 
@@ -67,8 +94,17 @@ Open `http://<pi-ip>:8080` in your browser. If you don't know the Pi's IP, conne
 
 ### 6. Connect the Pi to the target host
 
-- Pi 4B / 5: use the USB-C power port
-- Pi Zero W / Zero 2 W: use the USB data port
+```
+    ┌────────┐   USB-C   ┌───────────┐
+    │  Pi 4B │══════════▶│  Target   │   Use the USB-C power port
+    │  Pi 5  │           │   Host    │
+    └────────┘           └───────────┘
+
+    ┌────────┐   USB     ┌───────────┐
+    │ Pi Zero│══════════▶│  Target   │   Use the USB data port
+    │  W/2W  │           │   Host    │   (not the power-only port)
+    └────────┘           └───────────┘
+```
 
 ## Web GUI features
 
@@ -80,6 +116,8 @@ Open `http://<pi-ip>:8080` in your browser. If you don't know the Pi's IP, conne
 - **Remove** devices with confirmation dialog
 - **Trust** devices for auto-reconnect
 - **Processing states** with visual spinner feedback
+- **Device limit** display (connected / max in header)
+- **Unsupported** devices flagged (audio, phones) with disabled pair button
 - Devices are removed from the nearby list after pairing
 
 ### Network management
@@ -99,6 +137,37 @@ When the Pi cannot connect to any known WiFi network, it automatically creates a
 - **IP:** `10.42.0.1`
 - The AP shuts down automatically when WiFi reconnects
 - The AP activates automatically when WiFi disconnects
+
+### Gamepad button mapping
+
+Xbox and similar Bluetooth gamepads are supported via keyboard key mapping:
+
+| Gamepad Button | Keyboard Key |
+| --- | --- |
+| A (South) | Enter |
+| B (East) | Escape |
+| X (North) | Space |
+| Y (West) | Backspace |
+| LB / RB | Page Up / Page Down |
+| LT / RT | Left Shift / Right Shift |
+| View / Select | Tab |
+| Menu / Start | Enter |
+| Xbox / Mode | Escape |
+| Left Stick Click | Left Ctrl |
+| Right Stick Click | Left Alt |
+
+> [!NOTE]
+> Analog sticks and D-pad use absolute axis events and are not mapped in the current version.
+
+## Supported devices
+
+| Type | Supported | Notes |
+| --- | --- | --- |
+| ⌨️ Keyboard | Yes | Full key relay |
+| 🖱️ Mouse | Yes | Movement, buttons, scroll |
+| 🎮 Gamepad | Yes | Buttons mapped to keyboard keys |
+| 🎧 Audio | No | Cannot relay as USB HID |
+| 📱 Phone | No | Cannot relay as USB HID |
 
 ## Architecture
 
@@ -130,21 +199,6 @@ The setup script disables unnecessary services to reduce boot time on a dedicate
 | `keyboard-setup` / `console-setup` | ~0.6s | Headless Pi, no local console |
 
 The `bt-web` service starts with `Type=idle` and `Nice=10` so it does not compete with `bluetooth_2_usb` at boot.
-
-## Requirements
-
-- Raspberry Pi Zero W, Zero 2 W, 4B, or 5
-- Raspberry Pi OS Bookworm or newer
-- Internet access during installation
-- Bluetooth keyboard, mouse, or both
-- USB cable that supports data
-
-> [!NOTE]
-> Pi 3 models include Bluetooth, but they do not expose a suitable
-> device-mode port for this project.
-> On Pi 4B and Pi 5, the OTG-capable port is the USB-C power port.
-> On Pi Zero boards, the OTG-capable port is the USB data port, not the
-> power-only port.
 
 ## Managed paths
 

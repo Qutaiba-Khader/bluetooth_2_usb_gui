@@ -78,6 +78,9 @@ body {
 .btn-success:hover:not(:disabled) { background: #16a34a; }
 .btn-sm { padding: 5px 10px; font-size: 0.78rem; border-radius: 6px; }
 
+/* Hint text */
+.hint { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; }
+
 /* Device Grid */
 .device-grid { display: flex; flex-direction: column; gap: 10px; }
 
@@ -122,6 +125,14 @@ body {
 .status-dot.processing { background: var(--warning); animation: pulse 1s infinite; }
 .status-label { font-size: 0.72rem; }
 .device-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+
+/* Unsupported badge */
+.badge-unsupported {
+  display: inline-block; font-size: 0.68rem; font-weight: 500;
+  color: var(--warning); background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 4px; padding: 2px 6px; white-space: nowrap;
+}
 
 /* Spinner */
 .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--warning); border-radius: 50%; animation: spin 0.7s linear infinite; }
