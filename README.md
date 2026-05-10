@@ -22,6 +22,8 @@ devices. To the target host, the Pi appears as a standard wired USB
 keyboard and mouse — no Bluetooth support, pairing flow, or special drivers
 required on the target system.
 
+![Bluetooth-to-USB HID bridge overview for Raspberry Pi](assets/overview.png)
+
 ## Web GUI
 
 ![Bluetooth-to-USB Web GUI](assets/web_gui.jpeg)
