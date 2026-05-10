@@ -36,6 +36,24 @@ chmod +x /etc/NetworkManager/dispatcher.d/99-bt2usb-ap
 
 cp "$SCRIPT_DIR/bt2usb-ap-fallback.service" /etc/systemd/system/
 
+echo "[+] Installing gamepad mapping..."
+VENV_MAPPING="/opt/bluetooth_2_usb/venv/lib/python3.*/site-packages/bluetooth_2_usb/evdev/mapping.py"
+SRC_MAPPING="/opt/bluetooth_2_usb/src/bluetooth_2_usb/evdev/mapping.py"
+for target in $VENV_MAPPING; do
+  if [ -f "$target" ] && [ -f "$SRC_MAPPING" ]; then
+    cp "$SRC_MAPPING" "$target"
+    rm -f "$(dirname "$target")/__pycache__/mapping."*.pyc
+    echo "    Updated $(dirname "$target")"
+  fi
+done
+
+echo "[+] Disabling WiFi power save (BT coexistence)..."
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/wifi-powersave.conf <<WEOF
+[connection]
+wifi.powersave = 2
+WEOF
+
 echo "[+] Optimizing boot time..."
 systemctl disable --now cloud-init-main.service cloud-init-local.service \
   cloud-init-network.service cloud-config.service cloud-final.service \
