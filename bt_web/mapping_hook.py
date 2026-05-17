@@ -23,7 +23,7 @@ _macro_defs = {}
 
 
 def load_custom_mappings():
-    """Load all device mapping JSON files. Supports multiple targets and macros."""
+    """Load all device mapping JSON files. Supports macros and multi-map."""
     global _override_map, _macro_map, _macro_defs
     _override_map = {}
     _macro_map = {}
@@ -35,13 +35,10 @@ def load_custom_mappings():
     for f in MAPPINGS_DIR.glob("*.json"):
         try:
             data = json.loads(f.read_text())
-            all_macros = data.get("macros", [])
 
-            # Load macro definitions (indexed)
-            for i, macro in enumerate(all_macros):
+            # Load macro definitions
+            for i, macro in enumerate(data.get("macros", [])):
                 steps = macro.get("steps", [])
-                if not steps:
-                    continue
                 step_list = []
                 for s in steps:
                     hid = s.get("hid_usage")
@@ -52,30 +49,45 @@ def load_custom_mappings():
                 if step_list:
                     _macro_defs[i] = step_list
 
-                # Direct trigger macros
-                trigger_code = macro.get("trigger_code")
-                if trigger_code is not None and step_list:
-                    _macro_map[trigger_code] = step_list
-                    macro_count += 1
-
             # Load mappings
             for m in data.get("mappings", []):
                 src = m.get("source", {})
-                tgt = m.get("target", {})
                 evdev_code = src.get("evdev_code")
-                hid_usage = tgt.get("hid_usage")
-                tgt_type = tgt.get("type", "keyboard")
-                if evdev_code is None or hid_usage is None:
+                if evdev_code is None:
                     continue
 
-                # Mapping targets a macro by index
+                # Handle targets array format
+                targets = m.get("targets")
+                if targets:
+                    steps = []
+                    for t in targets:
+                        hid = t.get("hid_usage")
+                        stype = t.get("type", "keyboard")
+                        delay = t.get("delay", 50) / 1000.0
+                        if hid is not None:
+                            steps.append((hid, stype in ("consumer", "system"), delay))
+                    if len(steps) == 1:
+                        if evdev_code not in _override_map:
+                            _override_map[evdev_code] = []
+                        _override_map[evdev_code].append(steps[0][:2])
+                        count += 1
+                    elif len(steps) > 1:
+                        _macro_map[evdev_code] = steps
+                        macro_count += 1
+                    continue
+
+                # Single target format
+                tgt = m.get("target", {})
+                hid_usage = tgt.get("hid_usage")
+                tgt_type = tgt.get("type", "keyboard")
+                if hid_usage is None:
+                    continue
                 if tgt_type == "macro":
                     macro_idx = hid_usage
                     if macro_idx in _macro_defs:
                         _macro_map[evdev_code] = _macro_defs[macro_idx]
                         macro_count += 1
                     continue
-
                 is_consumer = tgt_type in ("consumer", "system")
                 if evdev_code not in _override_map:
                     _override_map[evdev_code] = []
@@ -85,7 +97,7 @@ def load_custom_mappings():
             logger.info("Loaded mappings from %s", f.stem)
         except Exception as e:
             logger.error("Failed to load mapping %s: %s", f, e)
-    logger.info("Total: %d mappings (%d scancodes), %d macros", count, len(_override_map), macro_count)
+    logger.info("Total: %d mappings, %d macros", count, macro_count)
 
 
 def install_hook():
@@ -159,18 +171,14 @@ def install_hook():
                     await gadget.release(hid_usage_id)
 
         async def patched_dispatch_key_event(self, event: KeyEvent):
-            # Macros: on key_down, fire all steps as press+release sequence
             macro_steps = _macro_map.get(event.scancode)
             if macro_steps:
                 if event.keystate == KeyEvent.key_down:
                     for hid_usage_id, is_consumer, delay in macro_steps:
-                        try:
-                            await _send_key(self, hid_usage_id, is_consumer, True)
-                            await asyncio.sleep(delay)
-                            await _send_key(self, hid_usage_id, is_consumer, False)
-                            await asyncio.sleep(delay)
-                        except Exception as e:
-                            logger.error("Macro step error: %s", e)
+                        await _send_key(self, hid_usage_id, is_consumer, True)
+                        await asyncio.sleep(delay)
+                        await _send_key(self, hid_usage_id, is_consumer, False)
+                        await asyncio.sleep(delay)
                 return
 
             # Normal dispatch (first target)

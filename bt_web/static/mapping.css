@@ -242,6 +242,69 @@ body {
 .mapping-btn.source { border-left: 3px solid #0ea5e9; }
 .mapping-btn.target { border-left: 3px solid var(--success); }
 
+/* Macro step chips */
+.macro-name-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: #ffffff;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-family: monospace;
+  width: 150px;
+}
+.macro-step-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+.macro-step-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: monospace;
+  padding: 2px 4px;
+}
+.macro-step-btn:hover { color: var(--accent-hover); }
+.macro-delay-input {
+  width: 45px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 4px;
+  text-align: center;
+}
+.macro-step-remove {
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+}
+.macro-step-remove:hover { opacity: 1; }
+.macro-step-arrow {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 0 2px;
+}
+.macro-add-step {
+  background: none;
+  border: 1px dashed var(--border-color);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.macro-add-step:hover { border-color: var(--success); color: var(--success); }
+
 .mapping-arrow {
   color: var(--text-muted);
   font-size: 16px;

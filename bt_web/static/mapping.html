@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Key Mapping</title>
-  <link rel="stylesheet" href="/static/mapping.css?v=3">
+  <link rel="stylesheet" href="/static/mapping.css?v=5">
 </head>
 <body>
   <div class="mapper-app">
@@ -138,10 +138,11 @@
 
     </div>
 
+
     <!-- Macros Tab -->
     <div class="tab-content" id="tab-macros">
       <p style="color:var(--text-muted);margin-bottom:12px;font-size:13px">
-        Define key sequences triggered by a single key press. Each macro fires a series of keys with configurable delays.
+        Define key sequences. Assign a macro to a key in the Mappings tab (select it from the target picker under "Macros").
       </p>
       <div id="macro-list"></div>
       <button class="add-mapping-btn" onclick="addMacro()">+ Add Macro</button>
@@ -190,6 +191,6 @@
   <div class="toast-container" id="toast-container"></div>
 
   <script src="/static/usages.js?v=5"></script>
-  <script src="/static/mapping.js?v=7"></script>
+  <script src="/static/mapping.js?v=9"></script>
 </body>
 </html>
