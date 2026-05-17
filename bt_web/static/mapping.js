@@ -185,6 +185,8 @@ async function loadDevice() {
 }
 
 // --- Mapping Rows ---
+let dragIdx = null;
+
 function renderMappings() {
   const list = document.getElementById("mapping-list");
   if (mappings.length === 0) {
@@ -192,7 +194,8 @@ function renderMappings() {
     return;
   }
   list.innerHTML = mappings.map((m, i) => `
-    <div class="mapping-row" data-idx="${i}">
+    <div class="mapping-row" data-idx="${i}" draggable="true">
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
       <span class="row-num">${i + 1}</span>
       <button class="mapping-btn source" onclick="openPicker('source', ${i})">${keyLabel(m.source.name)}</button>
       <span class="mapping-arrow">&rarr;</span>
@@ -200,6 +203,48 @@ function renderMappings() {
       <button class="mapping-delete" onclick="deleteMapping(${i})" title="Remove">&times;</button>
     </div>
   `).join("");
+
+  // Drag-and-drop handlers
+  list.querySelectorAll(".mapping-row").forEach(row => {
+    row.addEventListener("dragstart", (e) => {
+      dragIdx = parseInt(row.dataset.idx);
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+      list.querySelectorAll(".drag-over, .drag-over-below").forEach(r => r.classList.remove("drag-over", "drag-over-below"));
+      dragIdx = null;
+    });
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const rect = row.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      list.querySelectorAll(".drag-over, .drag-over-below").forEach(r => r.classList.remove("drag-over", "drag-over-below"));
+      if (e.clientY < midY) {
+        row.classList.add("drag-over");
+      } else {
+        row.classList.add("drag-over-below");
+      }
+    });
+    row.addEventListener("dragleave", () => {
+      row.classList.remove("drag-over", "drag-over-below");
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      row.classList.remove("drag-over", "drag-over-below");
+      const dropIdx = parseInt(row.dataset.idx);
+      if (dragIdx === null || dragIdx === dropIdx) return;
+      const rect = row.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      let targetIdx = e.clientY < midY ? dropIdx : dropIdx + 1;
+      if (targetIdx > dragIdx) targetIdx--;
+      const [moved] = mappings.splice(dragIdx, 1);
+      mappings.splice(targetIdx, 0, moved);
+      renderMappings();
+    });
+  });
 }
 
 function addMapping() {
@@ -295,7 +340,7 @@ function setPickerCat(cat) {
 
 function filterPicker() {
   const search = document.getElementById("picker-search").value.toLowerCase();
-  const items = pickerMode === "source" ? getSourceList() : getTargetList();
+  const items = pickerMode === "source" ? getSourceListCached() : getTargetListCached();
   const filtered = items.filter(item => {
     if (pickerCategory !== "All" && item.category !== pickerCategory) return false;
     if (search && !item.name.toLowerCase().includes(search) && !String(item.code).includes(search)) return false;
@@ -355,8 +400,8 @@ function pickItem(item) {
 
 // --- Quick Actions ---
 function quickMap(sourceName, targetName, targetType) {
-  const sourceList = getSourceList();
-  const targetList = getTargetList();
+  const sourceList = getSourceListCached();
+  const targetList = getTargetListCached();
   const src = sourceList.find(s => s.name === sourceName);
   const tgt = targetList.find(t => t.name === targetName);
   if (!src || !tgt) { toast("Usage not found", "error"); return; }
@@ -464,6 +509,27 @@ function findMappedTarget(evdevName, evdevCode) {
 }
 
 let monitorRows = {};
+let lastActiveRow = null;
+
+// Cached usage lists (rebuilt only when needed)
+let _cachedSourceList = null;
+let _cachedTargetList = null;
+
+function getSourceListCached() {
+  if (!_cachedSourceList) _cachedSourceList = getSourceList();
+  return _cachedSourceList;
+}
+function getTargetListCached() {
+  _cachedTargetList = getTargetList();
+  // Add defined macros as targets
+  macros.forEach((m, i) => {
+    if (m.steps && m.steps.length > 0) {
+      const label = m.trigger ? `Macro ${i+1}: ${m.trigger}` : `Macro ${i+1}`;
+      _cachedTargetList.push({ name: label, code: i, category: "Macros", type: "macro" });
+    }
+  });
+  return _cachedTargetList;
+}
 
 function startMonitor() {
   if (monitorWs) return;
@@ -481,7 +547,7 @@ function startMonitor() {
 
   monitorWs.onmessage = (e) => {
     const data = JSON.parse(e.data);
-    document.querySelectorAll("#monitor-body tr").forEach(r => r.classList.remove("monitor-active"));
+    if (lastActiveRow) { lastActiveRow.classList.remove("monitor-active"); lastActiveRow = null; }
 
     if (data.mouse_move) {
       let row = document.getElementById("mon-mouse");
@@ -492,6 +558,7 @@ function startMonitor() {
       }
       row.innerHTML = `<td></td><td style="color:var(--text-muted)">REL</td><td>${keyLabel("MOUSE_MOVE")}</td><td>REL_XY</td><td style="color:var(--text-muted)">—</td><td style="color:#f0c040">${data.value}</td><td></td><td></td>`;
       row.classList.add("monitor-active");
+      lastActiveRow = row;
       return;
     }
 
@@ -524,6 +591,7 @@ function startMonitor() {
     const mappedLabel = r.mappedTo ? keyLabel(r.mappedTo) : '—';
     row.innerHTML = `<td><button class="btn btn-ghost btn-sm" onclick="monitorToMapping(${data.code}, '${r.name}')" title="Add mapping for this key">+</button></td><td${unsupStyle}>${data.code}</td><td${unsupStyle}>${keyLabel(r.name)}</td><td>${r.hidName ? keyLabel(r.hidName) : (r.unsupported ? '<span style="color:var(--danger)">unmapped</span>' : '')}</td><td style="${mappedStyle}">${mappedLabel}</td><td class="${valClass}">${r.last}</td><td>${r.min}</td><td>${r.max}</td>`;
     row.classList.add("monitor-active");
+    lastActiveRow = row;
   };
 
   monitorWs.onclose = () => {

@@ -7,10 +7,10 @@ sys.path.insert(0, "/opt/bluetooth_2_usb/bt_web")
 
 try:
     from mapping_hook import install_hook
-    install_hook()
+    success = install_hook()
     print("[b2u_wrapper] Hook installed successfully", flush=True)
 except Exception as e:
-    print(f"[b2u_wrapper] Hook failed: {e}", flush=True)
+    print(f"[b2u_wrapper] Hook import/call failed: {e}", flush=True)
     import traceback
     traceback.print_exc()
 

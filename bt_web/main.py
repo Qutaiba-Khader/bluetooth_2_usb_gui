@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
-import subprocess
-from datetime import datetime
+import re
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -28,6 +28,20 @@ app.mount("/static", StaticFiles(directory=str(static)), name="static")
 
 MAPPINGS_DIR = Path("/opt/bluetooth_2_usb/mappings")
 MAPPINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Pre-compiled patterns for monitor log parsing
+_RE_CONVERTED = re.compile(
+    r"Converted evdev scancode 0x([0-9A-Fa-f]+) \((\w+)\) to HID UsageID 0x([0-9A-Fa-f]+) \((\w+)\)"
+)
+_RE_PRESS = re.compile(
+    r"(Pressing|Releasing) (\w+) \(0x([0-9A-Fa-f]+)\) via"
+)
+_RE_UNSUPPORTED = re.compile(
+    r"Unsupported key pressed: 0x([0-9A-Fa-f]+)"
+)
+_RE_MOUSE = re.compile(
+    r"Sending mouse movement to gadget:.*x=(-?\d+) y=(-?\d+) wheel=(-?\d+)"
+)
 
 
 @app.get("/")
@@ -109,45 +123,33 @@ async def monitor_ws(websocket: WebSocket, mac: str):
                 )
 
                 async def stream():
-                    import re
-                    converted_pattern = re.compile(
-                        r"Converted evdev scancode 0x([0-9A-Fa-f]+) \((\w+)\) to HID UsageID 0x([0-9A-Fa-f]+) \((\w+)\)"
-                    )
-                    press_pattern = re.compile(
-                        r"(Pressing|Releasing) (\w+) \(0x([0-9A-Fa-f]+)\) via"
-                    )
-                    unsupported_pattern = re.compile(
-                        r"Unsupported key pressed: 0x([0-9A-Fa-f]+)"
-                    )
-                    mouse_pattern = re.compile(
-                        r"Sending mouse movement to gadget:.*x=(-?\d+) y=(-?\d+) wheel=(-?\d+)"
-                    )
                     pending_conversion = {}
-                    import time
-                    last_mouse_send = 0
+                    last_mouse_send = 0.0
                     try:
                         while proc and proc.stdout:
                             line = await proc.stdout.readline()
                             if not line:
                                 break
                             text = line.decode(errors="replace")
-                            ts = text.split()[0] if text.split() else ""
+                            parts = text.split(None, 1)
+                            ts = parts[0] if parts else ""
 
-                            mc = converted_pattern.search(text)
+                            mc = _RE_CONVERTED.search(text)
                             if mc:
-                                evdev_code = int(mc.group(1), 16)
-                                evdev_name = mc.group(2)
-                                hid_code = int(mc.group(3), 16)
                                 hid_name = mc.group(4)
                                 pending_conversion[hid_name] = {
-                                    "evdev_code": evdev_code,
-                                    "evdev_name": evdev_name,
-                                    "hid_code": hid_code,
+                                    "evdev_code": int(mc.group(1), 16),
+                                    "evdev_name": mc.group(2),
+                                    "hid_code": int(mc.group(3), 16),
                                     "hid_name": hid_name,
                                 }
+                                # Bound dict to prevent unbounded growth
+                                if len(pending_conversion) > 64:
+                                    oldest = next(iter(pending_conversion))
+                                    del pending_conversion[oldest]
                                 continue
 
-                            mp = press_pattern.search(text)
+                            mp = _RE_PRESS.search(text)
                             if mp:
                                 action = mp.group(1)
                                 key_name = mp.group(2)
@@ -166,7 +168,7 @@ async def monitor_ws(websocket: WebSocket, mac: str):
                                 })
                                 continue
 
-                            mu = unsupported_pattern.search(text)
+                            mu = _RE_UNSUPPORTED.search(text)
                             if mu:
                                 evdev_code = int(mu.group(1), 16)
                                 await websocket.send_json({
@@ -180,7 +182,7 @@ async def monitor_ws(websocket: WebSocket, mac: str):
                                 })
                                 continue
 
-                            mm = mouse_pattern.search(text)
+                            mm = _RE_MOUSE.search(text)
                             if mm:
                                 now = time.monotonic()
                                 if now - last_mouse_send < 0.2:
@@ -247,11 +249,13 @@ print(json.dumps(devices))
 @app.post("/api/service/restart")
 async def restart_service():
     try:
-        result = subprocess.run(
-            ["sudo", "systemctl", "restart", "bluetooth_2_usb"],
-            capture_output=True, text=True, timeout=10
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "systemctl", "restart", "bluetooth_2_usb",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        return {"success": result.returncode == 0, "message": result.stderr or "OK"}
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        return {"success": proc.returncode == 0, "message": stderr.decode().strip() or "OK"}
     except Exception as e:
         return {"success": False, "message": str(e)}
 

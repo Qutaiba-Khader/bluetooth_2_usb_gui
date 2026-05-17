@@ -174,10 +174,46 @@ body {
   gap: 10px;
   padding: 10px 14px;
   border-radius: 6px;
-  transition: background 0.1s;
+  transition: background 0.1s, transform 0.15s, box-shadow 0.15s;
+  border-left: 4px solid var(--row-color, #4a00e0);
 }
 .mapping-row:nth-child(odd) { background: var(--bg-surface); }
 .mapping-row:nth-child(even) { background: var(--bg-hover); }
+
+/* Row colors cycling */
+.mapping-row:nth-child(8n+1) { --row-color: #0ea5e9; }
+.mapping-row:nth-child(8n+2) { --row-color: #8b5cf6; }
+.mapping-row:nth-child(8n+3) { --row-color: #f59e0b; }
+.mapping-row:nth-child(8n+4) { --row-color: #10b981; }
+.mapping-row:nth-child(8n+5) { --row-color: #ec4899; }
+.mapping-row:nth-child(8n+6) { --row-color: #06b6d4; }
+.mapping-row:nth-child(8n+7) { --row-color: #f97316; }
+.mapping-row:nth-child(8n+8) { --row-color: #a855f7; }
+
+/* Drag handle */
+.drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 16px;
+  padding: 4px 2px;
+  user-select: none;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.drag-handle:hover { opacity: 1; color: var(--text-primary); }
+.drag-handle:active { cursor: grabbing; }
+
+/* Drag states */
+.mapping-row.dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+}
+.mapping-row.drag-over {
+  box-shadow: 0 -2px 0 0 var(--accent);
+}
+.mapping-row.drag-over-below {
+  box-shadow: 0 2px 0 0 var(--accent);
+}
 
 .mapping-row .row-num {
   color: var(--text-muted);
