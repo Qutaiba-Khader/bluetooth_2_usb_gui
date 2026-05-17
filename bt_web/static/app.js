@@ -55,7 +55,9 @@ function deviceCard(dev, isPaired) {
     actions = `<span class="spinner"></span><span class="processing-text">Please wait...</span>`;
   } else if (isPaired) {
     if (connected) {
+      const macPath = dev.mac.replace(/:/g, "-");
       actions = `
+        <a class="btn btn-ghost btn-sm" href="/mapping/${macPath}" style="text-decoration:none">Mapping</a>
         <button class="btn btn-ghost btn-sm" onclick="disconnectDevice('${dev.mac}')">Disconnect</button>
         <button class="btn btn-danger btn-sm" onclick="confirmRemove('${dev.mac}', '${dev.name.replace(/'/g, "\\'")}')">Remove</button>`;
     } else {

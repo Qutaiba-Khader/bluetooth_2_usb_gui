@@ -1,7 +1,11 @@
+import asyncio
+import json
 import logging
+import subprocess
+from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -22,10 +26,234 @@ net = NetworkManager()
 static = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(static)), name="static")
 
+MAPPINGS_DIR = Path("/opt/bluetooth_2_usb/mappings")
+MAPPINGS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 @app.get("/")
 async def index():
     return FileResponse(str(static / "index.html"))
+
+
+# --- Mapping Page ---
+
+@app.get("/mapping/{mac}")
+async def mapping_page(mac: str):
+    return FileResponse(str(static / "mapping.html"))
+
+
+# --- Mapping API ---
+
+@app.get("/api/mapping/{mac}")
+async def get_mapping(mac: str):
+    mac_clean = mac.replace("-", ":").upper()
+    mac_file = mac.replace(":", "-")
+    path = MAPPINGS_DIR / f"{mac_file}.json"
+    device_name = mac_clean
+    try:
+        devices = await bt.get_paired_devices()
+        for d in devices:
+            if d.get("mac", "").upper() == mac_clean:
+                device_name = d.get("name", mac_clean)
+                break
+    except Exception:
+        pass
+    if path.exists():
+        data = json.loads(path.read_text())
+        data["device_name"] = device_name
+        return data
+    return {"device_name": device_name, "mac": mac_clean, "mappings": []}
+
+
+@app.post("/api/mapping/{mac}")
+async def save_mapping(mac: str, body: dict):
+    mac_file = mac.replace(":", "-")
+    path = MAPPINGS_DIR / f"{mac_file}.json"
+    path.write_text(json.dumps(body, indent=2))
+    log.info("Saved mapping for %s (%d rules)", mac, len(body.get("mappings", [])))
+    return {"success": True}
+
+
+@app.delete("/api/mapping/{mac}")
+async def delete_mapping(mac: str):
+    mac_file = mac.replace(":", "-")
+    path = MAPPINGS_DIR / f"{mac_file}.json"
+    if path.exists():
+        path.unlink()
+        log.info("Deleted custom mapping for %s", mac)
+    return {"success": True}
+
+
+# --- Monitor WebSocket ---
+
+@app.websocket("/ws/monitor/{mac}")
+async def monitor_ws(websocket: WebSocket, mac: str):
+    await websocket.accept()
+    mac_clean = mac.replace("-", ":").upper()
+    log.info("Monitor WebSocket connected for %s", mac_clean)
+    monitoring = False
+    proc = None
+
+    try:
+        while True:
+            msg = await websocket.receive_text()
+            data = json.loads(msg)
+
+            if data.get("action") == "start" and not monitoring:
+                monitoring = True
+                proc = await asyncio.create_subprocess_exec(
+                    "journalctl", "-f", "-u", "bluetooth_2_usb",
+                    "--no-pager", "-o", "short-precise",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+
+                async def stream():
+                    import re
+                    converted_pattern = re.compile(
+                        r"Converted evdev scancode 0x([0-9A-Fa-f]+) \((\w+)\) to HID UsageID 0x([0-9A-Fa-f]+) \((\w+)\)"
+                    )
+                    press_pattern = re.compile(
+                        r"(Pressing|Releasing) (\w+) \(0x([0-9A-Fa-f]+)\) via"
+                    )
+                    unsupported_pattern = re.compile(
+                        r"Unsupported key pressed: 0x([0-9A-Fa-f]+)"
+                    )
+                    mouse_pattern = re.compile(
+                        r"Sending mouse movement to gadget:.*x=(-?\d+) y=(-?\d+) wheel=(-?\d+)"
+                    )
+                    pending_conversion = {}
+                    import time
+                    last_mouse_send = 0
+                    try:
+                        while proc and proc.stdout:
+                            line = await proc.stdout.readline()
+                            if not line:
+                                break
+                            text = line.decode(errors="replace")
+                            ts = text.split()[0] if text.split() else ""
+
+                            mc = converted_pattern.search(text)
+                            if mc:
+                                evdev_code = int(mc.group(1), 16)
+                                evdev_name = mc.group(2)
+                                hid_code = int(mc.group(3), 16)
+                                hid_name = mc.group(4)
+                                pending_conversion[hid_name] = {
+                                    "evdev_code": evdev_code,
+                                    "evdev_name": evdev_name,
+                                    "hid_code": hid_code,
+                                    "hid_name": hid_name,
+                                }
+                                continue
+
+                            mp = press_pattern.search(text)
+                            if mp:
+                                action = mp.group(1)
+                                key_name = mp.group(2)
+                                hid_code = int(mp.group(3), 16)
+                                value = 1 if action == "Pressing" else 0
+                                conv = pending_conversion.pop(key_name, None)
+                                evdev_code = conv["evdev_code"] if conv else hid_code
+                                evdev_name = conv["evdev_name"] if conv else key_name
+                                await websocket.send_json({
+                                    "code": evdev_code,
+                                    "name": evdev_name,
+                                    "value": value,
+                                    "hid_code": hid_code,
+                                    "hid_name": key_name,
+                                    "timestamp": ts
+                                })
+                                continue
+
+                            mu = unsupported_pattern.search(text)
+                            if mu:
+                                evdev_code = int(mu.group(1), 16)
+                                await websocket.send_json({
+                                    "code": evdev_code,
+                                    "name": f"UNSUPPORTED_0x{mu.group(1).upper()}",
+                                    "value": 1,
+                                    "hid_code": None,
+                                    "hid_name": None,
+                                    "unsupported": True,
+                                    "timestamp": ts
+                                })
+                                continue
+
+                            mm = mouse_pattern.search(text)
+                            if mm:
+                                now = time.monotonic()
+                                if now - last_mouse_send < 0.2:
+                                    continue
+                                last_mouse_send = now
+                                mx, my, mw = int(mm.group(1)), int(mm.group(2)), int(mm.group(3))
+                                await websocket.send_json({
+                                    "code": "mouse",
+                                    "name": "MOUSE_MOVE",
+                                    "value": f"x={mx} y={my}",
+                                    "hid_code": None,
+                                    "hid_name": "REL_XY",
+                                    "mouse_move": True,
+                                    "timestamp": ts
+                                })
+                    except (WebSocketDisconnect, ConnectionError):
+                        pass
+
+                asyncio.create_task(stream())
+
+            elif data.get("action") == "stop":
+                monitoring = False
+                if proc:
+                    proc.kill()
+                    proc = None
+
+    except (WebSocketDisconnect, ConnectionError):
+        pass
+    finally:
+        if proc:
+            proc.kill()
+        log.info("Monitor WebSocket closed for %s", mac_clean)
+
+
+async def find_evdev_for_mac(mac: str) -> list[str]:
+    try:
+        result = await asyncio.create_subprocess_exec(
+            "/opt/bluetooth_2_usb/venv/bin/python3", "-c", """
+import evdev, json
+devices = []
+for path in evdev.list_devices():
+    dev = evdev.InputDevice(path)
+    devices.append({"path": path, "name": dev.name, "phys": dev.phys, "uniq": dev.uniq})
+print(json.dumps(devices))
+""",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await result.communicate()
+        devices = json.loads(stdout.decode())
+        mac_lower = mac.lower()
+        matched = [d["path"] for d in devices if d.get("uniq", "").lower() == mac_lower]
+        if matched:
+            return matched
+        hid_devices = [d["path"] for d in devices if d.get("uniq")]
+        return hid_devices
+    except Exception as e:
+        log.error("Failed to find evdev device: %s", e)
+    return []
+
+
+# --- Service Control ---
+
+@app.post("/api/service/restart")
+async def restart_service():
+    try:
+        result = subprocess.run(
+            ["sudo", "systemctl", "restart", "bluetooth_2_usb"],
+            capture_output=True, text=True, timeout=10
+        )
+        return {"success": result.returncode == 0, "message": result.stderr or "OK"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 
 # --- Bluetooth ---
