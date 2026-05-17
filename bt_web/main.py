@@ -85,7 +85,22 @@ async def save_mapping(mac: str, body: dict):
     path = MAPPINGS_DIR / f"{mac_file}.json"
     path.write_text(json.dumps(body, indent=2))
     log.info("Saved mapping for %s (%d rules)", mac, len(body.get("mappings", [])))
+    # Auto-restart relay so mapping hook reloads the new config
+    asyncio.create_task(_restart_relay())
     return {"success": True}
+
+
+async def _restart_relay():
+    await asyncio.sleep(0.5)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "systemctl", "restart", "bluetooth_2_usb",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=10)
+        log.info("Relay service restarted to apply new mappings")
+    except Exception as e:
+        log.error("Failed to restart relay after save: %s", e)
 
 
 @app.delete("/api/mapping/{mac}")

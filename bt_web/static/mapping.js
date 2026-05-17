@@ -278,7 +278,7 @@ async function saveMappings() {
     if (r.success) {
       mappings = valid;
       renderMappings();
-      toast("Mappings saved!", "success");
+      toast("Saved! Relay restarting to apply changes...", "success");
     } else {
       toast("Save failed: " + (r.message || ""), "error");
     }
