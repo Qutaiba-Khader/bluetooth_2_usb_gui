@@ -153,40 +153,127 @@ async function loadDevices() {
   } catch { c.innerHTML = '<div class="empty">Failed to load devices</div>'; }
 }
 
+let scanTimer = null;
+let scanning = false;
+
 async function startScan() {
+  if (scanning) { await stopScan(); return; }
   const btn = document.getElementById("scan-btn");
   const c = document.getElementById("scan-results");
-  btn.disabled = true;
-  document.getElementById("scan-text").textContent = "Scanning...";
+  scanning = true;
   btn.classList.add("scanning");
-  c.innerHTML = '<div class="empty"><span class="scan-dot"></span> Scanning... (~8 seconds)</div>';
+  document.getElementById("scan-text").textContent = "Stop";
+  c.innerHTML = '<div class="empty"><span class="scan-dot"></span> Scanning...</div>';
   try {
-    const data = await api("/scan", "POST");
-    if (data.devices.length === 0) {
-      c.innerHTML = '<div class="empty">No new devices found. Make sure your device is in pairing mode.</div>';
-    } else {
-      c.innerHTML = data.devices.map((d) => deviceCard(d, false)).join("");
-    }
-    toast(`Found ${data.devices.length} device(s)`, "success");
+    await api("/scan/start", "POST");
+    pollScanResults();
+    scanTimer = setInterval(pollScanResults, 2000);
   } catch {
     c.innerHTML = '<div class="empty">Scan failed. Try again.</div>';
     toast("Scan failed", "error");
-  } finally {
-    btn.disabled = false;
-    document.getElementById("scan-text").textContent = "Scan";
+    scanning = false;
     btn.classList.remove("scanning");
+    document.getElementById("scan-text").textContent = "Scan";
   }
 }
 
+async function pollScanResults() {
+  try {
+    const data = await api("/scan/results");
+    const c = document.getElementById("scan-results");
+    if (data.devices.length === 0) {
+      c.innerHTML = '<div class="empty"><span class="scan-dot"></span> Scanning...</div>';
+    } else {
+      c.innerHTML = data.devices.map((d) => deviceCard(d, false)).join("");
+    }
+  } catch {}
+}
+
+async function stopScan() {
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  scanning = false;
+  try { await api("/scan/stop", "POST"); } catch {}
+  const btn = document.getElementById("scan-btn");
+  btn.classList.remove("scanning");
+  document.getElementById("scan-text").textContent = "Scan";
+  await pollScanResults();
+  const c = document.getElementById("scan-results");
+  if (!c.querySelector(".device-card")) {
+    c.innerHTML = '<div class="empty">No new devices found. Make sure your device is in pairing mode.</div>';
+  }
+}
+
+let pairingMac = null;
+let pairingPoll = null;
+
 async function pairDevice(mac) {
   setProcessing(mac, true);
-  toast("Pairing... If prompted, confirm on the device.", "info");
+  pairingMac = mac;
+  toast("Pairing...", "info");
+
+  // Start polling for passkey prompts
+  pairingPoll = setInterval(() => pollPairingStatus(mac), 1000);
+
   try {
     const r = await api(`/pair/${mac}`, "POST");
+    clearInterval(pairingPoll);
+    pairingPoll = null;
+    closePasskeyDialog();
     if (r.success) { toast("Paired and connected!", "success"); removeFromNearby(mac); }
-    else toast("Pairing failed: " + (r.message || "Unknown error"), "error");
-  } catch { toast("Pairing request failed", "error"); }
-  finally { setProcessing(mac, false); loadDevices(); loadAdapter(); }
+    else toast(r.message || "Pairing failed", "error");
+  } catch {
+    clearInterval(pairingPoll);
+    pairingPoll = null;
+    closePasskeyDialog();
+    toast("Pairing request failed", "error");
+  } finally {
+    setProcessing(mac, false);
+    pairingMac = null;
+    loadDevices();
+    loadAdapter();
+  }
+}
+
+async function pollPairingStatus(mac) {
+  try {
+    const s = await api(`/pair/${mac}/status`);
+    if (s.status === "passkey_required" && s.passkey) {
+      showPasskeyDialog(s.passkey, s.passkey_type);
+    }
+  } catch {}
+}
+
+function showPasskeyDialog(passkey, type) {
+  document.getElementById("passkey-code").textContent = passkey;
+  const hint = document.getElementById("passkey-hint");
+  const confirmBtn = document.getElementById("passkey-confirm-btn");
+  if (type === "display") {
+    hint.textContent = "Type this code on the keyboard, then press Enter";
+    confirmBtn.style.display = "none";
+  } else {
+    hint.textContent = "Does this code match the one shown on the device?";
+    confirmBtn.style.display = "";
+  }
+  document.getElementById("passkey-overlay").classList.remove("hidden");
+}
+
+function closePasskeyDialog() {
+  document.getElementById("passkey-overlay").classList.add("hidden");
+}
+
+async function confirmPasskey() {
+  if (!pairingMac) return;
+  closePasskeyDialog();
+  toast("Confirming passkey...", "info");
+  try { await api(`/pair/${pairingMac}/confirm`, "POST", { confirmed: true }); }
+  catch {}
+}
+
+async function rejectPasskey() {
+  if (!pairingMac) return;
+  closePasskeyDialog();
+  try { await api(`/pair/${pairingMac}/confirm`, "POST", { confirmed: false }); }
+  catch {}
 }
 
 async function connectDevice(mac) {

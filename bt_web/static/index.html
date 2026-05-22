@@ -111,6 +111,18 @@
     </div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <div id="passkey-overlay" class="overlay hidden">
+    <div class="confirm-box" style="text-align:center">
+      <p style="font-weight:600;font-size:1.1em" id="passkey-title">Passkey Confirmation</p>
+      <div id="passkey-code" style="font-size:2.2em;letter-spacing:0.4em;font-weight:700;margin:20px 0;color:#4fc3f7"></div>
+      <p id="passkey-hint" style="opacity:0.7;font-size:0.9em;margin-bottom:20px"></p>
+      <div class="confirm-actions" id="passkey-actions">
+        <button class="btn btn-ghost" onclick="rejectPasskey()">Cancel</button>
+        <button class="btn btn-primary" id="passkey-confirm-btn" onclick="confirmPasskey()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=3"></script>
 </body>
 </html>

@@ -11,7 +11,7 @@
        (wireless)                   keyboard & mouse             keyboard & mouse
 ```
 
-A fork of [quaxalber/bluetooth_2_usb](https://github.com/quaxalber/bluetooth_2_usb) that adds a **web-based management GUI**, **fallback WiFi AP**, **gamepad-to-keyboard mapping**, and **boot optimizations**.
+A fork of [quaxalber/bluetooth_2_usb](https://github.com/quaxalber/bluetooth_2_usb) that adds a **web-based management GUI**, **fallback WiFi AP**, **Apple device pairing support**, and **boot optimizations**.
 
 Use Bluetooth keyboards, mice, and gamepads in BIOS and boot menus, installers, kiosks,
 tablets, KVM setups, retro systems, consoles, and other hosts where Bluetooth
@@ -22,12 +22,6 @@ devices. To the target host, the Pi appears as a standard wired USB
 keyboard and mouse — no Bluetooth support, pairing flow, or special drivers
 required on the target system.
 
-![Bluetooth-to-USB HID bridge overview for Raspberry Pi](assets/overview.png)
-
-## Web GUI
-
-![Bluetooth-to-USB Web GUI](assets/web_gui.jpeg)
-
 ## What this fork adds
 
 | Feature | Description |
@@ -35,10 +29,11 @@ required on the target system.
 | **Web GUI** | Manage Bluetooth devices from a browser — scan, pair, connect, disconnect, remove. Accessible at `http://<pi-ip>:8080` |
 | **Network management** | View WiFi status, scan and connect to networks, all from the web UI |
 | **Fallback WiFi AP** | When no known WiFi is available, the Pi creates a hotspot so you can always reach the web UI |
-| **Multi-device support** | Pair and relay multiple Bluetooth HID devices simultaneously (up to 7) |
-| **Gamepad support** | Xbox/PS controllers mapped to keyboard keys (A→Enter, B→Escape, X→Space, etc.) |
+| **Multi-device support** | Pair and relay multiple Bluetooth HID devices simultaneously (up to 4) |
+| **Apple device support** | Full pairing support for Apple Magic Keyboard, Magic Mouse, and Magic Trackpad via passkey confirmation |
 | **Auto-connect** | Paired devices are automatically trusted — they reconnect when in range |
-| **BLE pairing agent** | Proper `NoInputNoOutput` agent registration for BLE device pairing |
+| **BLE pairing agent** | `KeyboardDisplay` agent capability for broad device compatibility including Apple SSP pairing |
+| **Live scanning** | Devices appear in real-time as they are discovered — no waiting for scan to finish |
 | **Unsupported device detection** | Audio devices and phones are flagged as unsupported in the UI |
 | **Boot optimizations** | Disables unnecessary services — reduces boot time by ~10 seconds |
 | **Processing indicators** | Visual feedback during pair/connect operations with spinner states |
@@ -112,8 +107,9 @@ Open `http://<pi-ip>:8080` in your browser. If you don't know the Pi's IP, conne
 
 ### Bluetooth management
 
-- **Scan** for nearby Bluetooth devices
-- **Pair** devices with one click (BLE + Classic)
+- **Live scan** — devices appear in real-time as they are discovered
+- **Pair** devices with one click (BLE + Classic + Apple SSP passkey)
+- **Passkey dialog** — on-screen passkey confirmation for Apple and other SSP devices
 - **Connect / Disconnect** paired devices
 - **Remove** devices with confirmation dialog
 - **Trust** devices for auto-reconnect
@@ -140,34 +136,14 @@ When the Pi cannot connect to any known WiFi network, it automatically creates a
 - The AP shuts down automatically when WiFi reconnects
 - The AP activates automatically when WiFi disconnects
 
-### Gamepad button mapping
-
-Xbox and similar Bluetooth gamepads are supported via keyboard key mapping:
-
-| Gamepad Button | Keyboard Key |
-| --- | --- |
-| A (South) | Enter |
-| B (East) | Escape |
-| X (North) | Space |
-| Y (West) | Backspace |
-| LB / RB | Page Up / Page Down |
-| LT / RT | Left Shift / Right Shift |
-| View / Select | Tab |
-| Menu / Start | Enter |
-| Xbox / Mode | Escape |
-| Left Stick Click | Left Ctrl |
-| Right Stick Click | Left Alt |
-
-> [!NOTE]
-> Analog sticks and D-pad use absolute axis events and are not mapped in the current version.
-
 ## Supported devices
 
 | Type | Supported | Notes |
 | --- | --- | --- |
-| ⌨️ Keyboard | Yes | Full key relay |
-| 🖱️ Mouse | Yes | Movement, buttons, scroll |
-| 🎮 Gamepad | Yes | Buttons mapped to keyboard keys |
+| ⌨️ Keyboard | Yes | Full key relay, including Apple Magic Keyboard (passkey pairing) |
+| 🖱️ Mouse | Yes | Movement, buttons, scroll — including Apple Magic Mouse |
+| 🎮 Gamepad | Yes | Buttons relayed as HID events |
+| ⌨️ Apple Magic Trackpad | Yes | Paired via SSP confirmation or JustWorks |
 | 🎧 Audio | No | Cannot relay as USB HID |
 | 📱 Phone | No | Cannot relay as USB HID |
 

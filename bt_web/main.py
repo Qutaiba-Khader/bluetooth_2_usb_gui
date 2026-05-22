@@ -48,9 +48,37 @@ async def scan():
     return {"devices": await bt.scan()}
 
 
+@app.post("/api/scan/start")
+async def scan_start():
+    await bt.scan_start()
+    return {"success": True}
+
+
+@app.get("/api/scan/results")
+async def scan_results():
+    return {"devices": await bt.scan_results()}
+
+
+@app.post("/api/scan/stop")
+async def scan_stop():
+    await bt.scan_stop()
+    return {"success": True}
+
+
 @app.post("/api/pair/{mac:path}")
 async def pair(mac: str):
     return await bt.pair_and_trust(mac)
+
+
+@app.get("/api/pair/{mac:path}/status")
+async def pair_status(mac: str):
+    return bt.get_pairing_status(mac)
+
+
+@app.post("/api/pair/{mac:path}/confirm")
+async def pair_confirm(mac: str, body: dict):
+    confirmed = body.get("confirmed", False)
+    return await bt.confirm_passkey(mac, confirmed)
 
 
 @app.post("/api/connect/{mac:path}")
