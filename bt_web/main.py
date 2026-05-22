@@ -28,6 +28,11 @@ async def index():
     return FileResponse(str(static / "index.html"))
 
 
+@app.get("/qr")
+async def qr_page():
+    return FileResponse(str(static / "qr.html"))
+
+
 # --- Bluetooth ---
 
 @app.get("/api/adapter")
