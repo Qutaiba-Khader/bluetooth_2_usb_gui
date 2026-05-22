@@ -36,7 +36,6 @@ required on the target system.
 | **Network management** | View WiFi status, scan and connect to networks, all from the web UI |
 | **Fallback WiFi AP** | When no known WiFi is available, the Pi creates a hotspot so you can always reach the web UI |
 | **Multi-device support** | Pair and relay multiple Bluetooth HID devices simultaneously (up to 7) |
-| **Key Mapping UI** | Per-device HID key remapping — remap any BT key to any USB HID output (keyboard, consumer, system). Includes Android TV Quick Actions, macros, live key monitor, import/export |
 | **Gamepad support** | Xbox/PS controllers mapped to keyboard keys (A→Enter, B→Escape, X→Space, etc.) |
 | **Auto-connect** | Paired devices are automatically trusted — they reconnect when in range |
 | **BLE pairing agent** | Proper `NoInputNoOutput` agent registration for BLE device pairing |
@@ -141,21 +140,6 @@ When the Pi cannot connect to any known WiFi network, it automatically creates a
 - The AP shuts down automatically when WiFi reconnects
 - The AP activates automatically when WiFi disconnects
 
-### Key Mapping (HID Remapper)
-
-Per-device key remapping UI accessible via the **Mapping** button on each connected device:
-
-- **Live Monitor** — see every key press in real-time with evdev code, HID output, and current mapping
-- **Visual Picker** — browse all HID usages by category (Keyboard, Android TV, Media, System, Mouse)
-- **Quick Actions** — one-click presets for Android TV navigation, volume, media transport, DPAD, color buttons
-- **Custom Codes** — enter arbitrary evdev/HID codes in decimal, hex, or full `0xPPPPUUUU` format
-- **Macros** — define multi-key sequences triggered by a single key press
-- **Import/Export** — share mapping configs as JSON files
-- **Android TV optimized** — includes all consumer DPAD, Voice Command, Assistant, Recent Apps, Settings, etc.
-- **Emoji labels** — visual icons on all buttons (⏯ ⏭ 🏠 ◀ 🔍 🎤 🔴🟢🔵🟡 etc.)
-
-Mapping data persists even if a device is unpaired — re-pair and your config is still there.
-
 ### Gamepad button mapping
 
 Xbox and similar Bluetooth gamepads are supported via keyboard key mapping:
@@ -191,7 +175,7 @@ Xbox and similar Bluetooth gamepads are supported via keyboard key mapping:
 
 ```
 bt_web/
-├── main.py              # FastAPI application (BT, network, mapping, monitor WebSocket)
+├── main.py              # FastAPI application
 ├── bt_manager.py        # Bluetooth operations via bluetoothctl
 ├── net_manager.py       # Network operations via nmcli
 ├── setup.sh             # Installation script
@@ -199,13 +183,9 @@ bt_web/
 ├── bt2usb-ap-fallback.service  # Boot-time AP fallback check
 ├── 99-bt2usb-ap         # NetworkManager dispatcher for AP fallback
 └── static/
-    ├── index.html        # Device management (two-column responsive layout)
+    ├── index.html        # Two-column responsive layout
     ├── style.css         # Dark theme UI
-    ├── app.js            # Frontend logic (device list, scan, pair)
-    ├── mapping.html      # Per-device key mapping page
-    ├── mapping.css       # Mapping page dark theme
-    ├── mapping.js        # Mapping UI logic (monitor, picker, macros, emoji)
-    └── usages.js         # Complete HID usage tables (source evdev + target HID)
+    └── app.js            # Frontend logic
 ```
 
 ## Boot optimizations
