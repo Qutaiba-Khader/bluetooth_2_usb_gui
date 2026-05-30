@@ -73,7 +73,7 @@ async function sendCommand(cmd, payload = []) {
   for (let i = 0; i < payload.length && i < REPORT_SIZE - 1; i++) {
     data[i + 1] = payload[i];
   }
-  await hidDevice.sendFeatureReport(REPORT_ID_CMD, data);
+  await hidDevice.sendReport(REPORT_ID_CMD, data);
   for (let attempt = 0; attempt < 20; attempt++) {
     await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
     try {

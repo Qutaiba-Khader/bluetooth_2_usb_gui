@@ -123,7 +123,7 @@ CONFIG_HID_DESCRIPTOR = bytes(
           0x26, 0xFF, 0x00,  # Logical Maximum (255)
           0x75, 0x08,        # Report Size (8 bits)
           0x95, 0x3F,        # Report Count (63 bytes payload)
-          0xB1, 0x02,        # Feature (Data, Variable, Absolute)
+          0x91, 0x02,        # Output (Data, Variable, Absolute)
           0x85, 0x02,        # Report ID (2) — response: device → host (Input)
           0x09, 0x21,        # Usage (0x21)
           0x15, 0x00,        # Logical Minimum (0)
