@@ -207,10 +207,12 @@ class BluetoothManager:
         all_devices = self._parse_device_list(output)
         paired_output = await self._run("devices", "Paired")
         paired_macs = {d["mac"] for d in self._parse_device_list(paired_output)}
+        connected_macs = await self._get_connected_macs()
+        exclude = paired_macs | connected_macs
 
         nearby = []
         for d in all_devices:
-            if d["mac"] not in paired_macs:
+            if d["mac"] not in exclude:
                 info = await self.get_device_info(d["mac"])
                 d["name"] = self._resolve_name(
                     str(info.get("name", "")), d["mac"], str(info.get("alias", ""))
