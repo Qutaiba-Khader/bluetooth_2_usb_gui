@@ -239,21 +239,26 @@ class ConfigDaemon:
         mac = bytes_to_mac(payload, 0)
         log.info(f"Pairing {mac}")
         await self.send(self.make_response(STATUS_BUSY, cmd))
-        result = await self.bt.pair_and_trust(mac)
+        pair_task = asyncio.create_task(self.bt.pair_and_trust(mac))
+        passkey_sent = False
+        for _ in range(150):
+            await asyncio.sleep(0.3)
+            if pair_task.done():
+                break
+            if not passkey_sent:
+                state = self.bt.get_pairing_status(mac)
+                if state.get("status") == "passkey_required":
+                    passkey = state.get("passkey", "000000")
+                    ptype = state.get("passkey_type", "confirm")
+                    status = STATUS_PASSKEY_DISPLAY if ptype == "display" else STATUS_PASSKEY_CONFIRM
+                    await self.send(self.make_response(status, cmd, data=passkey.encode()[:59]))
+                    passkey_sent = True
+        result = await pair_task
         if result.get("success"):
             await self.send(self.make_response(STATUS_OK, cmd))
         else:
-            state = self.bt.get_pairing_status(mac)
-            if state.get("status") == "passkey_required":
-                passkey = state.get("passkey", "000000")
-                ptype = state.get("passkey_type", "confirm")
-                status = STATUS_PASSKEY_DISPLAY if ptype == "display" else STATUS_PASSKEY_CONFIRM
-                await self.send(self.make_response(
-                    status, cmd, data=passkey.encode()[:59],
-                ))
-            else:
-                msg = result.get("message", "Failed")
-                await self.send(self.error_response(cmd, msg[:59]))
+            msg = result.get("message", "Failed")
+            await self.send(self.error_response(cmd, msg[:59]))
 
     async def cmd_pair_confirm(self, cmd, payload):
         if len(payload) < 7:

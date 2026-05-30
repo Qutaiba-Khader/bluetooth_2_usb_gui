@@ -127,6 +127,17 @@
     </div>
   </div>
 
+  <div id="wifi-pass-overlay" class="overlay hidden">
+    <div class="confirm-box">
+      <p id="wifi-pass-title" style="font-weight:600"></p>
+      <input type="password" id="wifi-pass-input" class="wifi-input" placeholder="Password" style="margin-top:0">
+      <div class="confirm-actions" style="margin-top:16px">
+        <button class="btn btn-ghost" onclick="closeWifiPassDialog()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitWifiPass()">Connect</button>
+      </div>
+    </div>
+  </div>
+
   <div id="passkey-overlay" class="overlay hidden">
     <div class="confirm-box" style="text-align:center">
       <p style="font-weight:600;font-size:1.1em" id="passkey-title">Passkey Confirmation</p>
@@ -265,10 +276,22 @@
       }
     };
 
+    let _wifiConnectSsid = '';
     window.promptWifiConnect = function (ssid, secured) {
-      const pass = secured ? prompt('Password for "' + ssid + '":') : '';
-      if (pass === null) return;
-      doWifiConnect(ssid, pass);
+      if (!secured) { doWifiConnect(ssid, ''); return; }
+      _wifiConnectSsid = ssid;
+      document.getElementById('wifi-pass-title').textContent = 'Connect to "' + ssid + '"';
+      document.getElementById('wifi-pass-input').value = '';
+      document.getElementById('wifi-pass-overlay').classList.remove('hidden');
+      document.getElementById('wifi-pass-input').focus();
+    };
+    window.closeWifiPassDialog = function () {
+      document.getElementById('wifi-pass-overlay').classList.add('hidden');
+    };
+    window.submitWifiPass = function () {
+      const pass = document.getElementById('wifi-pass-input').value;
+      closeWifiPassDialog();
+      doWifiConnect(_wifiConnectSsid, pass);
     };
 
     async function doWifiConnect(ssid, pass) {
