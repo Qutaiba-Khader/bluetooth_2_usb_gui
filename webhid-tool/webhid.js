@@ -22,6 +22,8 @@ const CMD = {
   WIFI_ENABLE: 0x11,
   WIFI_DISABLE: 0x12,
   WIFI_HOTSPOT: 0x13,
+  WIFI_SCAN: 0x14,
+  WIFI_CONNECT: 0x15,
 };
 
 const STATUS = {
@@ -37,7 +39,6 @@ const DEV_TYPE = { 0: "device", 1: "keyboard", 2: "mouse", 3: "gamepad", 4: "aud
 const DEV_ICON = { keyboard: "⌨️", mouse: "🖱️", gamepad: "🎮", audio: "🎧", combo: "🔀", device: "📡" };
 
 let hidDevice = null;
-let pendingResolve = null;
 let _onDisconnect = null;
 
 function isSupported() { return "hid" in navigator; }
@@ -49,10 +50,8 @@ async function connect(onDisconnect) {
   if (!device) throw new Error("No device selected");
   await device.open();
   hidDevice = device;
-  hidDevice.addEventListener("inputreport", onInputReport);
   hidDevice.addEventListener("disconnect", () => {
     hidDevice = null;
-    pendingResolve = null;
     if (typeof _onDisconnect === "function") _onDisconnect();
   });
   return device;
@@ -60,31 +59,12 @@ async function connect(onDisconnect) {
 
 function disconnect() {
   if (hidDevice) {
-    hidDevice.removeEventListener("inputreport", onInputReport);
     hidDevice.close();
     hidDevice = null;
   }
-  pendingResolve = null;
 }
 
 function isConnected() { return hidDevice !== null && hidDevice.opened; }
-
-function onInputReport(event) {
-  if (event.reportId !== REPORT_ID_RSP) return;
-  const view = event.data;
-  const response = {
-    status: view.getUint8(0),
-    cmdEcho: view.getUint8(1),
-    seq: view.getUint8(2),
-    total: view.getUint8(3),
-    data: new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4),
-  };
-  if (pendingResolve) {
-    const resolve = pendingResolve;
-    pendingResolve = null;
-    resolve(response);
-  }
-}
 
 async function sendCommand(cmd, payload = []) {
   if (!isConnected()) throw new Error("Not connected");
@@ -93,29 +73,26 @@ async function sendCommand(cmd, payload = []) {
   for (let i = 0; i < payload.length && i < REPORT_SIZE - 1; i++) {
     data[i + 1] = payload[i];
   }
-  const responsePromise = new Promise((resolve, reject) => {
-    pendingResolve = resolve;
-    setTimeout(() => {
-      if (pendingResolve === resolve) {
-        pendingResolve = null;
-        reject(new Error("Response timeout"));
-      }
-    }, 30000);
-  });
-  await hidDevice.sendReport(REPORT_ID_CMD, data);
-  return responsePromise;
-}
-
-async function waitForResponse(timeoutMs = 30000) {
-  return new Promise((resolve, reject) => {
-    pendingResolve = resolve;
-    setTimeout(() => {
-      if (pendingResolve === resolve) {
-        pendingResolve = null;
-        reject(new Error("Response timeout"));
-      }
-    }, timeoutMs);
-  });
+  await hidDevice.sendFeatureReport(REPORT_ID_CMD, data);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
+    try {
+      const report = await hidDevice.receiveFeatureReport(REPORT_ID_RSP);
+      const view = report.data;
+      if (view.byteLength < 4) continue;
+      const status = view.getUint8(0);
+      const cmdEcho = view.getUint8(1);
+      if (cmdEcho === 0 && status === 0) continue;
+      return {
+        status,
+        cmdEcho,
+        seq: view.getUint8(2),
+        total: view.getUint8(3),
+        data: new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4),
+      };
+    } catch { continue; }
+  }
+  throw new Error("Response timeout");
 }
 
 function parseMac(bytes, offset) {
@@ -250,6 +227,37 @@ async function disableWifi() {
   return sendCommand(CMD.WIFI_DISABLE);
 }
 
+async function scanWifiNetworks() {
+  const networks = [];
+  let page = 0;
+  const first = await sendCommand(CMD.WIFI_SCAN, [0]);
+  if (first.status !== STATUS.OK || first.total === 0) return networks;
+  networks.push({
+    ssid: parseString(first.data, 0, 31),
+    signal: first.data[31],
+    secured: !!first.data[32],
+  });
+  for (page = 1; page < first.total; page++) {
+    const r = await sendCommand(CMD.WIFI_SCAN, [page]);
+    if (r.status !== STATUS.OK) break;
+    networks.push({
+      ssid: parseString(r.data, 0, 31),
+      signal: r.data[31],
+      secured: !!r.data[32],
+    });
+  }
+  return networks;
+}
+
+async function connectWifi(ssid, password = "") {
+  const payload = new Uint8Array(63);
+  const ssidBytes = new TextEncoder().encode(ssid.slice(0, 30));
+  const passBytes = new TextEncoder().encode(password.slice(0, 31));
+  payload.set(ssidBytes, 0);
+  payload.set(passBytes, 31);
+  return sendCommand(CMD.WIFI_CONNECT, Array.from(payload));
+}
+
 async function startHotspot(ssid = "", password = "") {
   const payload = new Uint8Array(63);
   const ssidBytes = new TextEncoder().encode(ssid.slice(0, 30));
@@ -265,6 +273,6 @@ export {
   startScan, stopScan, getScanResults,
   pairDevice, confirmPair, unpairDevice,
   connectDevice, disconnectDevice,
-  getWifiStatus, enableWifi, disableWifi, startHotspot,
+  getWifiStatus, enableWifi, disableWifi, startHotspot, scanWifiNetworks, connectWifi,
   CMD, STATUS, DEV_ICON,
 };

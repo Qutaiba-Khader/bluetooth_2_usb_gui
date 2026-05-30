@@ -157,6 +157,25 @@ body {
 .net-val.on { color: var(--success); }
 .net-val.off { color: var(--text-muted); }
 
+/* WiFi list */
+.wifi-list { display: flex; flex-direction: column; gap: 6px; }
+.wifi-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  cursor: pointer; transition: background 0.15s;
+  font-size: 0.82rem;
+}
+.wifi-item:hover { background: var(--card-hover); }
+.wifi-ssid { flex: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wifi-lock { color: var(--text-muted); font-size: 0.7rem; }
+.wifi-bars { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+.wifi-bars span { width: 3px; background: var(--text-muted); border-radius: 1px; }
+.wifi-bars.s1 span:nth-child(1) { background: var(--warning); }
+.wifi-bars.s2 span:nth-child(1), .wifi-bars.s2 span:nth-child(2) { background: var(--warning); }
+.wifi-bars.s3 span:nth-child(1), .wifi-bars.s3 span:nth-child(2), .wifi-bars.s3 span:nth-child(3) { background: var(--success); }
+.wifi-bars.s4 span { background: var(--success); }
+
 /* WiFi input */
 .wifi-input {
   width: 100%; padding: 10px 12px; margin-top: 8px;

@@ -2,6 +2,7 @@
 """WebHID config daemon — reads /dev/hidg3, dispatches BT and WiFi commands."""
 
 import asyncio
+import fcntl
 import logging
 import os
 import struct
@@ -24,6 +25,8 @@ REPORT_ID_CMD = 1
 REPORT_ID_RSP = 2
 VERSION = "1.0.0"
 
+GADGET_HID_WRITE_GET_REPORT = (1 << 30) | (2 << 16) | (ord('g') << 8) | 0x42
+
 CMD_GET_DEVICE_LIST = 0x01
 CMD_GET_DEVICE_INFO = 0x02
 CMD_SCAN_START = 0x03
@@ -40,6 +43,8 @@ CMD_WIFI_STATUS = 0x10
 CMD_WIFI_ENABLE = 0x11
 CMD_WIFI_DISABLE = 0x12
 CMD_WIFI_HOTSPOT = 0x13
+CMD_WIFI_SCAN = 0x14
+CMD_WIFI_CONNECT = 0x15
 
 STATUS_OK = 0x00
 STATUS_ERROR = 0x01
@@ -105,6 +110,7 @@ class ConfigDaemon:
         self.net = NetworkManager()
         self.fd = None
         self.scan_cache = []
+        self.wifi_scan_cache = []
         self.write_lock = asyncio.Lock()
 
     def make_response(self, status, cmd, seq=0, total=1, data=b""):
@@ -123,14 +129,19 @@ class ConfigDaemon:
         return self.make_response(STATUS_ERROR, cmd, data=data)
 
     async def send(self, response):
-        packet = bytes([REPORT_ID_RSP]) + response
-        packet = packet[:REPORT_SIZE].ljust(REPORT_SIZE, b"\x00")
+        report = bytes([REPORT_ID_RSP]) + response
+        report = report[:REPORT_SIZE].ljust(REPORT_SIZE, b"\x00")
+        buf = struct.pack('<H', len(report)) + report
         loop = asyncio.get_event_loop()
         async with self.write_lock:
             try:
-                await loop.run_in_executor(None, os.write, self.fd, packet)
+                await loop.run_in_executor(None, fcntl.ioctl, self.fd, GADGET_HID_WRITE_GET_REPORT, buf)
             except Exception as e:
-                log.error(f"Write error: {e}")
+                log.error(f"Write error (ioctl): {e}, falling back to write()")
+                try:
+                    await loop.run_in_executor(None, os.write, self.fd, report)
+                except Exception as e2:
+                    log.error(f"Write fallback error: {e2}")
 
     async def handle(self, cmd, payload):
         try:
@@ -150,6 +161,8 @@ class ConfigDaemon:
                 CMD_WIFI_ENABLE: self.cmd_wifi_enable,
                 CMD_WIFI_DISABLE: self.cmd_wifi_disable,
                 CMD_WIFI_HOTSPOT: self.cmd_wifi_hotspot,
+                CMD_WIFI_SCAN: self.cmd_wifi_scan,
+                CMD_WIFI_CONNECT: self.cmd_wifi_connect,
             }
             handler = handlers.get(cmd)
             if handler:
@@ -335,6 +348,40 @@ class ConfigDaemon:
                             "802-11-wireless.ssid", ssid,
                             "wifi-sec.psk", password)
         result = await self.net.start_hotspot()
+        if result.get("success"):
+            await self.send(self.make_response(STATUS_OK, cmd))
+        else:
+            await self.send(self.error_response(cmd, result.get("message", "Failed")[:59]))
+
+    async def cmd_wifi_scan(self, cmd, payload):
+        page = payload[0] if payload else 0
+        if page == 0:
+            log.info("WiFi scan")
+            self.wifi_scan_cache = await self.net.scan_wifi()
+        if not self.wifi_scan_cache:
+            await self.send(self.make_response(STATUS_OK, cmd, seq=0, total=0))
+            return
+        if page >= len(self.wifi_scan_cache):
+            await self.send(self.make_response(STATUS_NOT_FOUND, cmd))
+            return
+        n = self.wifi_scan_cache[page]
+        data = bytearray(59)
+        ssid_bytes = n["ssid"].encode("utf-8")[:30]
+        data[0:len(ssid_bytes)] = ssid_bytes
+        data[31] = min(n.get("signal", 0), 255)
+        data[32] = 1 if n.get("security") else 0
+        await self.send(self.make_response(
+            STATUS_OK, cmd, seq=page, total=len(self.wifi_scan_cache), data=bytes(data),
+        ))
+
+    async def cmd_wifi_connect(self, cmd, payload):
+        ssid = unpack_string(payload, 0, 31) if payload else ""
+        password = unpack_string(payload, 31, 32) if len(payload) > 31 else ""
+        if not ssid:
+            await self.send(self.error_response(cmd, "SSID required"))
+            return
+        log.info(f"WiFi connect: ssid={ssid!r}")
+        result = await self.net.connect_wifi(ssid, password)
         if result.get("success"):
             await self.send(self.make_response(STATUS_OK, cmd))
         else:
