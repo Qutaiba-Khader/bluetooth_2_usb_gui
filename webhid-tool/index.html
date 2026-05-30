@@ -80,9 +80,6 @@
           </div>
           <p class="hint" style="margin-top:10px">WiFi is off by default. Pick a saved network or enter new credentials.</p>
 
-          <div style="margin-top:20px;text-align:center">
-            <button class="btn btn-ghost btn-sm" onclick="doDisconnect()">Disconnect USB</button>
-          </div>
         </section>
       </aside>
 
@@ -168,12 +165,6 @@
       } finally {
         btn.disabled = false;
       }
-    };
-
-    window.doDisconnect = function () {
-      hid.disconnect();
-      showDeviceView(false);
-      toast('Disconnected', 'info');
     };
 
     // --- Refresh ---
