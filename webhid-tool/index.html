@@ -66,13 +66,14 @@
           <div class="section-head" style="margin-top:20px">
             <h3>Connect WiFi</h3>
           </div>
+          <div id="wifi-history" class="wifi-list" style="margin-bottom:8px"></div>
           <input type="text" id="wifi-ssid" class="wifi-input" placeholder="SSID (network name)" style="margin-top:0">
           <input type="password" id="wifi-pass" class="wifi-input" placeholder="Password">
           <div class="wifi-buttons">
             <button id="wifi-enable-btn" class="btn btn-success btn-sm" onclick="doWifiEnable()">Enable</button>
             <button id="wifi-disable-btn" class="btn btn-danger btn-sm" onclick="doWifiDisable()">Disable</button>
           </div>
-          <p class="hint" style="margin-top:10px">WiFi is off by default. Enter SSID and password to enable, or leave blank to reconnect to a saved network.</p>
+          <p class="hint" style="margin-top:10px">WiFi is off by default. Pick a saved network or enter new credentials.</p>
 
           <div style="margin-top:20px;text-align:center">
             <button class="btn btn-ghost btn-sm" onclick="doDisconnect()">Disconnect USB</button>
@@ -207,13 +208,42 @@
       } catch {}
     };
 
+    function getWifiHistory() {
+      try { return JSON.parse(localStorage.getItem('bt2usb_wifi_history') || '[]'); }
+      catch { return []; }
+    }
+
+    function saveWifiHistory(ssid, pass) {
+      let history = getWifiHistory().filter(h => h.ssid !== ssid);
+      history.unshift({ ssid, pass });
+      if (history.length > 3) history = history.slice(0, 3);
+      localStorage.setItem('bt2usb_wifi_history', JSON.stringify(history));
+      renderWifiHistory();
+    }
+
+    function renderWifiHistory() {
+      const el = document.getElementById('wifi-history');
+      const history = getWifiHistory();
+      if (history.length === 0) { el.innerHTML = ''; return; }
+      el.innerHTML = history.map(h => `
+        <div class="wifi-item" onclick="selectWifi('${h.ssid.replace(/'/g, "\\'")}')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="opacity:0.5;flex-shrink:0"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.237 4.237 0 00-6 0zm-4-4l2 2a7.074 7.074 0 0110 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+          <span class="wifi-ssid">${h.ssid}</span>
+        </div>`).join('');
+    }
+
+    window.selectWifi = function (ssid) {
+      const entry = getWifiHistory().find(h => h.ssid === ssid);
+      if (entry) {
+        document.getElementById('wifi-ssid').value = entry.ssid;
+        document.getElementById('wifi-pass').value = entry.pass;
+      }
+    };
+
     window.doWifiEnable = async function () {
       const ssid = document.getElementById('wifi-ssid').value.trim();
       const pass = document.getElementById('wifi-pass').value;
-      if (ssid) {
-        localStorage.setItem('bt2usb_wifi_ssid', ssid);
-        localStorage.setItem('bt2usb_wifi_pass', pass);
-      }
+      if (ssid) saveWifiHistory(ssid, pass);
       document.getElementById('wifi-enable-btn').disabled = true;
       toast(ssid ? 'Enabling WiFi and connecting to ' + ssid + '...' : 'Enabling WiFi...', 'info');
       try {
@@ -456,10 +486,12 @@
       document.getElementById('browser-warning').style.display = '';
       document.getElementById('connect-btn').disabled = true;
     }
-    const savedSsid = localStorage.getItem('bt2usb_wifi_ssid');
-    const savedPass = localStorage.getItem('bt2usb_wifi_pass');
-    if (savedSsid) document.getElementById('wifi-ssid').value = savedSsid;
-    if (savedPass) document.getElementById('wifi-pass').value = savedPass;
+    renderWifiHistory();
+    const lastUsed = getWifiHistory()[0];
+    if (lastUsed) {
+      document.getElementById('wifi-ssid').value = lastUsed.ssid;
+      document.getElementById('wifi-pass').value = lastUsed.pass;
+    }
   </script>
 </body>
 </html>
