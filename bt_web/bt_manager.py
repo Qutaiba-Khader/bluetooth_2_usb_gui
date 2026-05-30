@@ -165,22 +165,6 @@ class BluetoothManager:
         log.info(f"[SVC] systemctl {action} {service}: rc={proc.returncode} {err or out or 'ok'}")
         return proc.returncode == 0
 
-    async def _freeze_b2u(self):
-        proc = await asyncio.create_subprocess_exec(
-            "systemctl", "kill", "-s", "SIGSTOP", "bluetooth_2_usb",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        )
-        await proc.communicate()
-        log.info("[SVC] bluetooth_2_usb frozen (SIGSTOP)")
-
-    async def _unfreeze_b2u(self):
-        proc = await asyncio.create_subprocess_exec(
-            "systemctl", "kill", "-s", "SIGCONT", "bluetooth_2_usb",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        )
-        await proc.communicate()
-        log.info("[SVC] bluetooth_2_usb resumed (SIGCONT)")
-
     async def scan_start(self):
         if self._scan_proc:
             try:
@@ -190,11 +174,6 @@ class BluetoothManager:
                 pass
             self._scan_proc = None
 
-        await self._freeze_b2u()
-        await asyncio.sleep(1)
-
-        # Keep bluetoothctl alive in interactive mode so BlueZ
-        # maintains the discovery session for the D-Bus client
         self._scan_proc = await asyncio.create_subprocess_exec(
             "bluetoothctl",
             stdin=asyncio.subprocess.PIPE,
@@ -204,9 +183,6 @@ class BluetoothManager:
         self._scan_proc.stdin.write(b"power on\n")
         await self._scan_proc.stdin.drain()
         await asyncio.sleep(1)
-        self._scan_proc.stdin.write(b"pairable on\n")
-        await self._scan_proc.stdin.drain()
-        await asyncio.sleep(0.5)
         self._scan_proc.stdin.write(b"scan on\n")
         await self._scan_proc.stdin.drain()
         log.info("[SCAN] Started interactive scan session")
@@ -224,8 +200,7 @@ class BluetoothManager:
                 except Exception:
                     pass
             self._scan_proc = None
-        await self._unfreeze_b2u()
-        log.info("[SCAN] Stopped, bt2usb resumed")
+        log.info("[SCAN] Stopped")
 
     async def scan_results(self):
         output = await self._run("devices")
