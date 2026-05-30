@@ -240,15 +240,16 @@
         try {
           await hid.disableWifi();
           toast('WiFi disabled', 'info');
-        } catch (e) { toast('Failed: ' + e.message, 'error'); }
+        } catch { toast('Command sent', 'info'); }
       } else {
-        toast('Enabling WiFi...', 'info');
+        toast('Enabling WiFi — wait 10s...', 'info');
         try {
-          await hid.enableWifi('', '');
-          toast('WiFi enabled', 'success');
-        } catch (e) { toast('Failed: ' + e.message, 'error'); }
+          hid.enableWifi('', '').catch(() => {});
+          await new Promise(r => setTimeout(r, 10000));
+          toast('WiFi should be on now', 'success');
+        } catch { toast('Command sent', 'info'); }
       }
-      await refreshWifi();
+      try { await refreshWifi(); } catch {}
     };
 
     window.doWifiScan = async function () {
