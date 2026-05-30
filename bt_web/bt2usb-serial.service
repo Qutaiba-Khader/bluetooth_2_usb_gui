@@ -1,0 +1,15 @@
+[Unit]
+Description=Bluetooth-2-USB Serial Config Daemon
+After=bluetooth_2_usb.service
+Requires=bluetooth_2_usb.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/bash /opt/bluetooth_2_usb/bt_web/add-acm.sh
+ExecStart=/opt/bluetooth_2_usb/bt_web/venv/bin/python /opt/bluetooth_2_usb/bt_web/serial_daemon.py
+Restart=always
+RestartSec=3
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

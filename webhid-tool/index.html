@@ -28,10 +28,10 @@
       </div>
     </header>
 
-    <!-- Connect prompt (shown when USB not connected) -->
+    <!-- Connect prompt -->
     <div id="connect-view">
       <div id="browser-warning" class="browser-warning" style="display:none">
-        <p>WebHID is not supported in this browser. Use <strong>Chrome 89+</strong> or <strong>Edge 89+</strong>.</p>
+        <p>WebSerial is not supported in this browser. Use <strong>Chrome 89+</strong> or <strong>Edge 89+</strong>.</p>
       </div>
       <div class="connect-prompt">
         <svg class="logo-icon" viewBox="0 0 24 24" fill="currentColor" width="48" height="48" style="margin-bottom:16px;opacity:0.6">
@@ -151,7 +151,7 @@
   </div>
 
   <script type="module">
-    import * as hid from './webhid.js';
+    import * as serial from './serial.js';
 
     const ICONS = { keyboard: "⌨️", mouse: "🖱️", audio: "🎧", phone: "📱", gamepad: "🎮", combo: "🔀", device: "📡" };
     let scanning = false;
@@ -163,7 +163,7 @@
       const btn = document.getElementById('connect-btn');
       btn.disabled = true;
       try {
-        await hid.connect(() => {
+        await serial.connect(() => {
           showDeviceView(false);
           toast('USB device disconnected', 'error');
         });
@@ -181,16 +181,17 @@
     // --- Refresh ---
 
     window.refreshAll = async function () {
-      if (!hid.isConnected()) return;
+      if (!serial.isConnected()) return;
       try {
-        const adapter = await hid.getAdapterInfo();
-        if (adapter) {
+        const r = await serial.getAdapterInfo();
+        if (r && r.data) {
+          const info = r.data;
           const dot = document.querySelector('.adapter-dot');
           const text = document.querySelector('.adapter-text');
-          dot.classList.toggle('on', adapter.powered);
-          text.textContent = adapter.powered ? adapter.name + ' — ' + adapter.address : 'Adapter Off';
+          dot.classList.toggle('on', info.powered);
+          text.textContent = info.powered ? info.name + ' — ' + info.address : 'Adapter Off';
           const limitEl = document.getElementById('device-limit');
-          document.getElementById('limit-text').textContent = adapter.connectedCount + ' / ' + adapter.maxConnected + ' connected';
+          document.getElementById('limit-text').textContent = (info.connected_count || 0) + ' / ' + (info.max_connected || 7) + ' connected';
           limitEl.style.display = 'flex';
         }
         await loadDevices();
@@ -205,58 +206,34 @@
     let hotspotActive = false;
 
     window.refreshWifi = async function () {
-      if (!hid.isConnected()) return;
+      if (!serial.isConnected()) return;
       try {
-        const w = await hid.getWifiStatus();
-        if (!w) return;
-        wifiOn = w.radioOn;
-        const conn = w.connected;
-        hotspotActive = conn && (w.ssid === 'Bluetooth To USB' || w.ssid === document.getElementById('hotspot-ssid').value);
+        const r = await serial.getNetworkStatus();
+        if (!r || !r.data) return;
+        const s = r.data;
+        wifiOn = s.connected || true;
+        hotspotActive = s.hotspot_active;
 
-        document.getElementById('net-conn').textContent = conn ? 'Connected' : (wifiOn ? 'On' : 'Off');
-        document.getElementById('net-conn').className = 'net-val ' + (conn ? 'on' : 'off');
-        document.getElementById('net-ssid').textContent = conn ? w.ssid : '--';
-        document.getElementById('net-ip').textContent = w.ip || '--';
-
-        const toggle = document.getElementById('wifi-toggle');
-        toggle.textContent = wifiOn ? 'Disable' : 'Enable';
-        toggle.className = 'btn btn-sm ' + (wifiOn ? 'btn-danger' : 'btn-success');
+        document.getElementById('net-conn').textContent = s.connected ? 'Connected' : 'Disconnected';
+        document.getElementById('net-conn').className = 'net-val ' + (s.connected ? 'on' : 'off');
+        document.getElementById('net-ssid').textContent = s.connected ? s.ssid : '--';
+        document.getElementById('net-ip').textContent = s.ip || '--';
 
         const sections = document.getElementById('wifi-sections');
-        sections.classList.toggle('enabled', wifiOn);
+        sections.classList.add('enabled');
 
         document.getElementById('hotspot-start').style.display = hotspotActive ? 'none' : '';
         document.getElementById('hotspot-stop').style.display = hotspotActive ? '' : 'none';
-
-        if (wifiOn && !conn) {
-          document.getElementById('wifi-network-list').innerHTML = '<div class="empty-sm">Click Scan to find networks</div>';
-        }
       } catch {}
     };
 
-    window.toggleWifi = async function () {
-      if (wifiOn) {
-        toast('Disabling WiFi...', 'info');
-        try {
-          await hid.disableWifi();
-          toast('WiFi disabled', 'info');
-        } catch { toast('Command sent', 'info'); }
-      } else {
-        toast('Enabling WiFi — wait 10s...', 'info');
-        try {
-          hid.enableWifi('', '').catch(() => {});
-          await new Promise(r => setTimeout(r, 10000));
-          toast('WiFi should be on now', 'success');
-        } catch { toast('Command sent', 'info'); }
-      }
-      try { await refreshWifi(); } catch {}
-    };
+    window.toggleWifi = function () {};
 
     window.doWifiScan = async function () {
       const el = document.getElementById('wifi-network-list');
       el.innerHTML = '<div class="empty-sm"><span class="scan-dot"></span> Scanning...</div>';
       try {
-        const networks = await hid.scanWifiNetworks();
+        const networks = await serial.scanWifi();
         if (networks.length === 0) {
           el.innerHTML = '<div class="empty-sm">No networks found</div>';
         } else {
@@ -265,10 +242,10 @@
             if (n.signal > 75) level = 's4';
             else if (n.signal > 50) level = 's3';
             else if (n.signal > 25) level = 's2';
-            return `<div class="wifi-item" onclick="promptWifiConnect('${n.ssid.replace(/'/g, "\\'")}', ${n.secured})">
+            return `<div class="wifi-item" onclick="promptWifiConnect('${n.ssid.replace(/'/g, "\\'")}', '${n.security || ''}')">
               <div class="wifi-bars ${level}"><span style="height:4px"></span><span style="height:7px"></span><span style="height:10px"></span><span style="height:14px"></span></div>
               <span class="wifi-ssid">${n.ssid}</span>
-              ${n.secured ? '<span class="wifi-lock">🔒</span>' : ''}
+              ${n.security ? '<span class="wifi-lock">🔒</span>' : ''}
             </div>`;
           }).join('');
         }
@@ -278,8 +255,8 @@
     };
 
     let _wifiConnectSsid = '';
-    window.promptWifiConnect = function (ssid, secured) {
-      if (!secured) { doWifiConnect(ssid, ''); return; }
+    window.promptWifiConnect = function (ssid, security) {
+      if (!security) { doWifiConnect(ssid, ''); return; }
       _wifiConnectSsid = ssid;
       document.getElementById('wifi-pass-title').textContent = 'Connect to "' + ssid + '"';
       document.getElementById('wifi-pass-input').value = '';
@@ -298,27 +275,17 @@
     async function doWifiConnect(ssid, pass) {
       toast('Connecting to ' + ssid + '...', 'info');
       try {
-        const r = await hid.connectWifi(ssid, pass);
-        if (r.status === hid.STATUS.OK) {
-          toast('Connected to ' + ssid, 'success');
-        } else {
-          toast('Failed: ' + parseErrorData(r.data), 'error');
-        }
+        const r = await serial.connectWifi(ssid, pass);
+        toast(r.success ? 'Connected to ' + ssid : 'Failed', r.success ? 'success' : 'error');
         await refreshWifi();
       } catch (e) { toast('Failed: ' + e.message, 'error'); }
     }
 
     window.doHotspot = async function () {
-      const ssid = document.getElementById('hotspot-ssid').value.trim() || 'Bluetooth To USB';
-      const pass = document.getElementById('hotspot-pass').value || '1111111111';
       toast('Starting hotspot...', 'info');
       try {
-        const r = await hid.startHotspot(ssid, pass);
-        if (r.status === hid.STATUS.OK) {
-          toast('Hotspot active — ' + ssid + ' / 10.42.0.1', 'success');
-        } else {
-          toast('Hotspot failed: ' + parseErrorData(r.data), 'error');
-        }
+        const r = await serial.startHotspot();
+        toast(r.success ? 'Hotspot active' : 'Hotspot failed', r.success ? 'success' : 'error');
         await refreshWifi();
       } catch (e) { toast('Hotspot failed: ' + e.message, 'error'); }
     };
@@ -326,7 +293,7 @@
     window.doHotspotStop = async function () {
       toast('Stopping hotspot...', 'info');
       try {
-        await hid.disableWifi();
+        await serial.connectWifi('', '');
         toast('Hotspot stopped', 'info');
         await refreshWifi();
       } catch (e) { toast('Stop failed: ' + e.message, 'error'); }
@@ -361,7 +328,7 @@
         }
       } else {
         if (supported) {
-          actions = `<button class="btn btn-primary btn-sm" onclick="doPair('${dev.mac}', ${dev.addrType || 0})">Pair</button>`;
+          actions = `<button class="btn btn-primary btn-sm" onclick="doPair('${dev.mac}')">Pair</button>`;
         } else {
           actions = '<button class="btn btn-ghost btn-sm" disabled title="This device type is not supported">Pair</button>';
         }
@@ -386,7 +353,7 @@
     async function loadDevices() {
       const el = document.getElementById('paired-devices');
       try {
-        const devices = await hid.getDeviceList();
+        const devices = await serial.getDeviceList();
         if (devices.length === 0) {
           el.innerHTML = '<div class="empty">No paired devices. Scan and pair a device to get started.</div>';
         } else {
@@ -405,12 +372,12 @@
       btn.disabled = true;
       document.getElementById('scan-text').textContent = 'Scanning...';
       btn.classList.add('scanning');
-      el.innerHTML = '<div class="empty"><span class="scan-dot"></span> Scanning... (~8 seconds)</div>';
+      el.innerHTML = '<div class="empty"><span class="scan-dot"></span> Scanning... (~10 seconds)</div>';
       try {
-        await hid.startScan();
-        await new Promise(r => setTimeout(r, 8000));
-        await hid.stopScan();
-        const devices = await hid.getScanResults();
+        await serial.scanStart();
+        await new Promise(r => setTimeout(r, 10000));
+        await serial.scanStop();
+        const devices = await serial.scanResults();
         if (devices.length === 0) {
           el.innerHTML = '<div class="empty">No new devices found. Make sure your device is in pairing mode.</div>';
         } else {
@@ -418,7 +385,7 @@
         }
         toast('Found ' + devices.length + ' device(s)', 'success');
       } catch (e) {
-        el.innerHTML = '<div class="empty">Scan failed. Try again.</div>';
+        el.innerHTML = '<div class="empty">Scan failed: ' + e.message + '</div>';
         toast('Scan failed', 'error');
       } finally {
         scanning = false;
@@ -428,19 +395,17 @@
       }
     };
 
-    window.doPair = async function (mac, addrType) {
+    window.doPair = async function (mac) {
       toast('Pairing... If prompted, confirm on the device.', 'info');
       try {
-        const r = await hid.pairDevice(mac, addrType);
-        if (r.status === hid.STATUS.OK) {
+        const r = await serial.pairDevice(mac);
+        if (r.success) {
           toast('Paired and connected!', 'success');
-          await loadDevices();
-          await refreshAll();
-        } else if (r.status === hid.STATUS.PASSKEY_DISPLAY || r.status === hid.STATUS.PASSKEY_CONFIRM) {
-          showPasskeyDialog(mac, parseErrorData(r.data), r.status === hid.STATUS.PASSKEY_DISPLAY);
         } else {
-          toast('Pairing failed: ' + parseErrorData(r.data), 'error');
+          toast('Pairing failed: ' + (r.message || ''), 'error');
         }
+        await loadDevices();
+        await refreshAll();
       } catch (e) {
         toast('Pairing failed: ' + e.message, 'error');
       }
@@ -448,8 +413,8 @@
 
     window.doConnectDev = async function (mac) {
       try {
-        const r = await hid.connectDevice(mac);
-        toast(r.status === hid.STATUS.OK ? 'Connected' : 'Connection failed', r.status === hid.STATUS.OK ? 'success' : 'error');
+        const r = await serial.connectDevice(mac);
+        toast(r.success ? 'Connected' : 'Connection failed', r.success ? 'success' : 'error');
         await loadDevices();
         await refreshAll();
       } catch (e) { toast('Connection failed', 'error'); }
@@ -457,7 +422,7 @@
 
     window.doDisconnectDev = async function (mac) {
       try {
-        await hid.disconnectDevice(mac);
+        await serial.disconnectDevice(mac);
         toast('Disconnected', 'info');
         await loadDevices();
         await refreshAll();
@@ -479,7 +444,7 @@
     async function doRemove(mac) {
       closeConfirm();
       try {
-        await hid.unpairDevice(mac);
+        await serial.removeDevice(mac);
         toast('Device removed', 'info');
         await loadDevices();
         await refreshAll();
@@ -500,7 +465,7 @@
     window.passkeyAccept = async function () {
       document.getElementById('passkey-overlay').classList.add('hidden');
       if (pendingPasskeyMac) {
-        await hid.confirmPair(pendingPasskeyMac, true);
+        await serial.confirmPair(pendingPasskeyMac, true);
         pendingPasskeyMac = null;
         toast('Passkey confirmed', 'success');
         await loadDevices();
@@ -511,18 +476,10 @@
     window.passkeyCancel = async function () {
       document.getElementById('passkey-overlay').classList.add('hidden');
       if (pendingPasskeyMac) {
-        await hid.confirmPair(pendingPasskeyMac, false);
+        await serial.confirmPair(pendingPasskeyMac, false);
         pendingPasskeyMac = null;
       }
     };
-
-    // --- Helpers ---
-
-    function parseErrorData(data) {
-      let s = '';
-      for (let i = 0; i < data.length && data[i] !== 0; i++) s += String.fromCharCode(data[i]);
-      return s || 'Unknown error';
-    }
 
     function showDeviceView(show) {
       document.getElementById('connect-view').style.display = show ? 'none' : '';
@@ -543,7 +500,7 @@
     }
 
     // Init
-    if (!hid.isSupported()) {
+    if (!serial.isSupported()) {
       document.getElementById('browser-warning').style.display = '';
       document.getElementById('connect-btn').disabled = true;
     }
