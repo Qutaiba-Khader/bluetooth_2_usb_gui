@@ -1,7 +1,6 @@
 [Unit]
 Description=Bluetooth-2-USB Serial Config Daemon
 After=bluetooth_2_usb.service
-Requires=bluetooth_2_usb.service
 
 [Service]
 Type=simple
