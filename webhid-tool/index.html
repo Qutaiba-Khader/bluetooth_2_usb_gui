@@ -395,12 +395,20 @@
       }
     };
 
+    function removeFromScanList(mac) {
+      const cards = document.querySelectorAll('#scan-results .device-card');
+      cards.forEach(function(c) { if (c.querySelector('.device-mac')?.textContent === mac) c.remove(); });
+      const el = document.getElementById('scan-results');
+      if (!el.querySelector('.device-card')) el.innerHTML = '<div class="empty">No new devices found.</div>';
+    }
+
     window.doPair = async function (mac) {
       toast('Pairing... If prompted, confirm on the device.', 'info');
       try {
         const r = await serial.pairDevice(mac);
         if (r.success) {
           toast('Paired and connected!', 'success');
+          removeFromScanList(mac);
         } else {
           toast('Pairing failed: ' + (r.message || ''), 'error');
         }
