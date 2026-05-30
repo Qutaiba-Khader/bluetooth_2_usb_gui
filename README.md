@@ -1,5 +1,5 @@
 <!-- omit in toc -->
-# Bluetooth-to-USB HID Bridge for Raspberry Pi — with Web GUI
+# Bluetooth-to-USB HID Bridge for Raspberry Pi
 
 ```
      ┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
@@ -11,7 +11,7 @@
        (wireless)                   keyboard & mouse             keyboard & mouse
 ```
 
-A fork of [quaxalber/bluetooth_2_usb](https://github.com/quaxalber/bluetooth_2_usb) that adds a **web-based management GUI**, **fallback WiFi AP**, **Apple device pairing support**, and **boot optimizations**.
+A fork of [quaxalber/bluetooth_2_usb](https://github.com/quaxalber/bluetooth_2_usb) that adds a **web-based management GUI**, **WebHID config tool**, **fallback WiFi AP**, **Apple device pairing**, and **boot optimizations**.
 
 Use Bluetooth keyboards, mice, and gamepads in BIOS and boot menus, installers, kiosks,
 tablets, KVM setups, retro systems, consoles, and other hosts where Bluetooth
@@ -27,16 +27,17 @@ required on the target system.
 | Feature | Description |
 | --- | --- |
 | **Web GUI** | Manage Bluetooth devices from a browser — scan, pair, connect, disconnect, remove. Accessible at `http://<pi-ip>:8080` |
+| **WebHID Config** | Manage BT devices directly over USB — no WiFi needed. Open the [WebHID tool](https://qutaiba-khader.github.io/bluetooth_2_usb_gui/) in Chrome |
 | **Network management** | View WiFi status, scan and connect to networks, all from the web UI |
 | **Fallback WiFi AP** | When no known WiFi is available, the Pi creates a hotspot so you can always reach the web UI |
 | **Multi-device support** | Pair and relay multiple Bluetooth HID devices simultaneously (up to 4) |
-| **Apple device support** | Full pairing support for Apple Magic Keyboard, Magic Mouse, and Magic Trackpad via passkey confirmation |
+| **Apple device support** | Full pairing support for Apple Magic Keyboard, Mouse, and Trackpad via passkey confirmation |
 | **Auto-connect** | Paired devices are automatically trusted — they reconnect when in range |
 | **BLE pairing agent** | `KeyboardDisplay` agent capability for broad device compatibility including Apple SSP pairing |
-| **Live scanning** | Devices appear in real-time as they are discovered — no waiting for scan to finish |
+| **Live scanning** | Devices appear in real-time as they are discovered |
 | **Unsupported device detection** | Audio devices and phones are flagged as unsupported in the UI |
 | **Boot optimizations** | Disables unnecessary services — reduces boot time by ~10 seconds |
-| **Processing indicators** | Visual feedback during pair/connect operations with spinner states |
+| **QR code page** | Access `http://<pi-ip>:8080/static/qr.html` to display a QR code for easy mobile access |
 
 ## Prerequisites
 
@@ -103,6 +104,26 @@ Open `http://<pi-ip>:8080` in your browser. If you don't know the Pi's IP, conne
     └────────┘           └───────────┘
 ```
 
+## WebHID Config Tool
+
+Manage Bluetooth devices directly over USB — no WiFi or network connection needed. The Pi exposes a vendor HID interface alongside the keyboard/mouse gadgets. Open the web tool in Chrome and pair/unpair devices through the same USB cable.
+
+**[Open WebHID Tool](https://qutaiba-khader.github.io/bluetooth_2_usb_gui/)**
+
+Requirements:
+- Chrome 89+ or Edge 89+ (WebHID API)
+- Pi connected via USB to the host running Chrome
+
+```
+ Host PC (Chrome)                    Pi Zero 2 W
+ ┌─────────────────┐    USB cable    ┌─────────────────┐
+ │  WebHID Tool    │◄══════════════▶│  Config HID     │
+ │  (static page)  │                │  (/dev/hidg3)   │
+ └─────────────────┘                └─────────────────┘
+   sendFeatureReport()                Config Daemon
+   receiveFeatureReport()             ↕ bluetoothctl
+```
+
 ## Web GUI features
 
 ### Bluetooth management
@@ -150,6 +171,14 @@ When the Pi cannot connect to any known WiFi network, it automatically creates a
 ## Architecture
 
 ```
+USB Composite Gadget (dwc2 + libcomposite)
+├── hid.usb0  Keyboard      → /dev/hidg0
+├── hid.usb1  Mouse          → /dev/hidg1
+├── hid.usb2  Consumer       → /dev/hidg2
+└── hid.usb3  Config HID     → /dev/hidg3  (WebHID)
+```
+
+```
 bt_web/
 ├── main.py              # FastAPI application
 ├── bt_manager.py        # Bluetooth operations via bluetoothctl
@@ -161,7 +190,13 @@ bt_web/
 └── static/
     ├── index.html        # Two-column responsive layout
     ├── style.css         # Dark theme UI
-    └── app.js            # Frontend logic
+    ├── app.js            # Frontend logic
+    └── qr.html           # QR code access page
+
+webhid-tool/             # Static WebHID web tool (GitHub Pages)
+├── index.html
+├── webhid.js            # WebHID communication layer
+└── style.css            # Dark theme
 ```
 
 ## Boot optimizations

@@ -64,3 +64,18 @@ MOUSE_MOVEMENT_REPORT_LENGTH = 6
 
 HI_RES_WHEEL_UNITS_PER_DETENT = 120
 """Linux high-resolution wheel event units per wheel detent."""
+
+HID_PAGE_VENDOR = 0xFF00
+"""HID Usage Page: Vendor Defined (for config HID interface)."""
+
+HID_USAGE_VENDOR_CONFIG = 0x01
+"""Vendor Page usage: Configuration interface."""
+
+CONFIG_HID_REPORT_LENGTH = 64
+"""Config HID feature report buffer size (1 byte report ID + 63 bytes data)."""
+
+CONFIG_HID_REPORT_ID_CMD = 1
+"""Config HID report ID for commands (host → device)."""
+
+CONFIG_HID_REPORT_ID_RSP = 2
+"""Config HID report ID for responses (device → host)."""

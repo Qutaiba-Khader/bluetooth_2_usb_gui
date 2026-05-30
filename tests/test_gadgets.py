@@ -26,6 +26,7 @@ from bluetooth_2_usb.gadgets.identity import (
     usb_configfs_hex_u16,
 )
 from bluetooth_2_usb.gadgets.layout import (
+    HID_FUNC_INDEX_CONFIG,
     HID_FUNC_INDEX_CONSUMER,
     HID_FUNC_INDEX_KEYBOARD,
     HID_FUNC_INDEX_MOUSE,
@@ -45,12 +46,13 @@ from bluetooth_2_usb.gadgets.layout import (
 )
 from bluetooth_2_usb.gadgets.manager import HidGadgets
 from bluetooth_2_usb.hid.constants import (
+    CONFIG_HID_REPORT_LENGTH,
     CONSUMER_IN_REPORT_LENGTH,
     KEYBOARD_IN_REPORT_LENGTH,
     MOUSE_CONFIGFS_REPORT_LENGTH,
     MOUSE_IN_REPORT_LENGTH,
 )
-from bluetooth_2_usb.hid.descriptors import DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
+from bluetooth_2_usb.hid.descriptors import CONFIG_HID_DESCRIPTOR, DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
 
 GADGETS_CONFIG = "bluetooth_2_usb.gadgets.config"
 GADGETS_MANAGER = "bluetooth_2_usb.gadgets.manager"
@@ -219,7 +221,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
     async def test_default_layout_uses_strict_keyboard_and_extended_mouse_consumer(self) -> None:
         layout = build_default_layout()
 
-        self.assertEqual(len(layout.devices), 3)
+        self.assertEqual(len(layout.devices), 4)
         self.assertEqual(bytes(layout.devices[0].descriptor), DEFAULT_KEYBOARD_DESCRIPTOR)
         self.assertEqual(bytes(layout.devices[1].descriptor), DEFAULT_MOUSE_DESCRIPTOR)
         self.assertEqual(DEFAULT_MOUSE_DESCRIPTOR.count(bytes((0x09, 0x48))), 2)
@@ -228,6 +230,9 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(layout.devices[1].out_report_lengths), (HID_OUT_REPORT_LENGTH_NONE,))
         self.assertEqual(layout.devices[1].configfs_report_length, MOUSE_CONFIGFS_REPORT_LENGTH)
         self.assertEqual(bytes(layout.devices[2].descriptor), bytes(usb_hid.Device.CONSUMER_CONTROL.descriptor))
+        self.assertEqual(bytes(layout.devices[3].descriptor), CONFIG_HID_DESCRIPTOR)
+        self.assertEqual(layout.devices[3].function_index, HID_FUNC_INDEX_CONFIG)
+        self.assertEqual(layout.devices[3].configfs_report_length, CONFIG_HID_REPORT_LENGTH)
         self.assertEqual(layout.bcd_device, USB_DEV_RELEASE_BCD)
         self.assertEqual(layout.product_name, USB_PRODUCT_NAME)
         self.assertEqual(layout.serial_number, USB_SERIAL_NUMBER)
@@ -237,6 +242,7 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(layout.devices[0].wakeup_on_write)
         self.assertFalse(layout.devices[1].wakeup_on_write)
         self.assertFalse(layout.devices[2].wakeup_on_write)
+        self.assertFalse(layout.devices[3].wakeup_on_write)
 
     async def test_default_layout_accepts_runtime_usb_identity(self) -> None:
         identity = UsbIdentity(product_name="USB Combo Device pi0w", serial_number="b2upi0w")
@@ -386,6 +392,12 @@ class HidGadgetsLayoutTest(unittest.IsolatedAsyncioTestCase):
                 .read_text(encoding="utf-8")
                 .strip(),
                 str(CONSUMER_IN_REPORT_LENGTH),
+            )
+            self.assertEqual(
+                (gadget_root / _hid_function_path(HID_FUNC_INDEX_CONFIG) / "report_length")
+                .read_text(encoding="utf-8")
+                .strip(),
+                str(CONFIG_HID_REPORT_LENGTH),
             )
 
     async def test_rebuild_gadget_sets_wakeup_on_write_only_when_supported(self) -> None:

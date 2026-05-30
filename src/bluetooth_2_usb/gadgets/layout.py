@@ -20,8 +20,16 @@ from pathlib import Path
 
 import usb_hid
 
-from ..hid.constants import MOUSE_CONFIGFS_REPORT_LENGTH, MOUSE_IN_REPORT_LENGTH
-from ..hid.descriptors import DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
+from ..hid.constants import (
+    CONFIG_HID_REPORT_ID_CMD,
+    CONFIG_HID_REPORT_ID_RSP,
+    CONFIG_HID_REPORT_LENGTH,
+    HID_PAGE_VENDOR,
+    HID_USAGE_VENDOR_CONFIG,
+    MOUSE_CONFIGFS_REPORT_LENGTH,
+    MOUSE_IN_REPORT_LENGTH,
+)
+from ..hid.descriptors import CONFIG_HID_DESCRIPTOR, DEFAULT_KEYBOARD_DESCRIPTOR, DEFAULT_MOUSE_DESCRIPTOR
 from .identity import USB_PRODUCT_NAME, USB_SERIAL_NUMBER, UsbIdentity
 
 USB_CFG_REQUIRED_ATTR = 0x80
@@ -71,6 +79,9 @@ HID_FUNC_INDEX_MOUSE = 1
 
 HID_FUNC_INDEX_CONSUMER = 2
 """Configfs HID function index for the consumer-control gadget."""
+
+HID_FUNC_INDEX_CONFIG = 3
+"""Configfs HID function index for the vendor config HID gadget (WebHID)."""
 
 HID_REPORT_ID_NONE = 0
 """Report ID value for HID functions that do not use numbered reports."""
@@ -206,6 +217,19 @@ def build_default_layout(identity: UsbIdentity | None = None) -> GadgetLayout:
                 function_index=HID_FUNC_INDEX_CONSUMER,
                 protocol=HID_FUNC_PROTOCOL_NONE,
                 subclass=HID_FUNC_SUBCLASS_NONE,
+            ),
+            GadgetHidDevice(
+                descriptor=CONFIG_HID_DESCRIPTOR,
+                usage_page=HID_PAGE_VENDOR,
+                usage=HID_USAGE_VENDOR_CONFIG,
+                report_ids=(CONFIG_HID_REPORT_ID_CMD, CONFIG_HID_REPORT_ID_RSP),
+                in_report_lengths=(0, 0),
+                out_report_lengths=(0, 0),
+                name="config gadget",
+                function_index=HID_FUNC_INDEX_CONFIG,
+                protocol=HID_FUNC_PROTOCOL_NONE,
+                subclass=HID_FUNC_SUBCLASS_NONE,
+                configfs_report_length=CONFIG_HID_REPORT_LENGTH,
             ),
         ),
         bcd_device=USB_DEV_RELEASE_BCD,
