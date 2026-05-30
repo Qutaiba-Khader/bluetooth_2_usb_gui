@@ -37,10 +37,12 @@ const DEV_ICON = { keyboard: "⌨️", mouse: "🖱️", gamepad: "🎮", audio:
 
 let hidDevice = null;
 let pendingResolve = null;
+let _onDisconnect = null;
 
 function isSupported() { return "hid" in navigator; }
 
-async function connect() {
+async function connect(onDisconnect) {
+  _onDisconnect = onDisconnect || null;
   const filters = [{ vendorId: VID, productId: PID, usagePage: USAGE_PAGE }];
   const [device] = await navigator.hid.requestDevice({ filters });
   if (!device) throw new Error("No device selected");
@@ -50,7 +52,7 @@ async function connect() {
   hidDevice.addEventListener("disconnect", () => {
     hidDevice = null;
     pendingResolve = null;
-    if (typeof onDisconnectCb === "function") onDisconnectCb();
+    if (typeof _onDisconnect === "function") _onDisconnect();
   });
   return device;
 }
@@ -247,9 +249,6 @@ async function disableWifi() {
   return sendCommand(CMD.WIFI_DISABLE);
 }
 
-let onDisconnectCb = null;
-function setOnDisconnect(cb) { onDisconnectCb = cb; }
-
 export {
   isSupported, connect, disconnect, isConnected,
   getVersion, getAdapterInfo, getDeviceList,
@@ -257,6 +256,5 @@ export {
   pairDevice, confirmPair, unpairDevice,
   connectDevice, disconnectDevice,
   getWifiStatus, enableWifi, disableWifi,
-  setOnDisconnect,
   CMD, STATUS, DEV_ICON,
 };

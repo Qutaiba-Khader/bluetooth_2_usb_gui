@@ -164,8 +164,7 @@
       const btn = document.getElementById('connect-btn');
       btn.disabled = true;
       try {
-        await hid.connect();
-        hid.setOnDisconnect(() => {
+        await hid.connect(() => {
           showDeviceView(false);
           toast('USB device disconnected', 'error');
         });
