@@ -210,6 +210,10 @@
     window.doWifiEnable = async function () {
       const ssid = document.getElementById('wifi-ssid').value.trim();
       const pass = document.getElementById('wifi-pass').value;
+      if (ssid) {
+        localStorage.setItem('bt2usb_wifi_ssid', ssid);
+        localStorage.setItem('bt2usb_wifi_pass', pass);
+      }
       document.getElementById('wifi-enable-btn').disabled = true;
       toast(ssid ? 'Enabling WiFi and connecting to ' + ssid + '...' : 'Enabling WiFi...', 'info');
       try {
@@ -452,6 +456,10 @@
       document.getElementById('browser-warning').style.display = '';
       document.getElementById('connect-btn').disabled = true;
     }
+    const savedSsid = localStorage.getItem('bt2usb_wifi_ssid');
+    const savedPass = localStorage.getItem('bt2usb_wifi_pass');
+    if (savedSsid) document.getElementById('wifi-ssid').value = savedSsid;
+    if (savedPass) document.getElementById('wifi-pass').value = savedPass;
   </script>
 </body>
 </html>
