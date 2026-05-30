@@ -6,7 +6,6 @@ log = logging.getLogger("bt_manager")
 
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-HID_UUID = "00001812-0000-1000-8000-00805f9b34fb"
 MAX_CONNECTED = 7
 
 PASSKEY_RE = re.compile(r"Confirm passkey (\d{6})")
@@ -139,31 +138,7 @@ class BluetoothManager:
         output = await self._run("devices", "Connected")
         return {d["mac"] for d in self._parse_device_list(output)}
 
-    async def get_relay_count(self):
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "bluetooth_2_usb", "--list", "--output", "json",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
-        except Exception:
-            return 0
-        return stdout.decode().count('"relay"')
-
-    # --- Scan (live streaming) ---
-
-    async def _systemctl(self, action, service="bluetooth_2_usb"):
-        proc = await asyncio.create_subprocess_exec(
-            "systemctl", action, service,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        out = stdout.decode().strip()
-        err = stderr.decode().strip()
-        log.info(f"[SVC] systemctl {action} {service}: rc={proc.returncode} {err or out or 'ok'}")
-        return proc.returncode == 0
+    # --- Scan ---
 
     async def scan_start(self):
         if self._scan_proc:
@@ -222,39 +197,14 @@ class BluetoothManager:
                 dtype = self._device_type(info.get("icon", ""))
                 d["type"] = dtype
                 d["supported"] = _is_hid_supported(dtype)
-                nearby.append(d)
+                if d["supported"]:
+                    nearby.append(d)
         return nearby
 
     async def scan_results(self):
         return getattr(self, "_scan_cache", [])
 
-    async def scan(self, duration=8):
-        await self.scan_start()
-        await asyncio.sleep(duration)
-        devices = await self.scan_results()
-        await self.scan_stop()
-        return devices
-
     # --- Pairing (line-by-line with passkey support) ---
-
-    async def _read_lines(self, proc, timeout=30):
-        """Read stdout lines until timeout, yielding each stripped line."""
-        lines = []
-        try:
-            async def _reader():
-                while True:
-                    raw = await proc.stdout.readline()
-                    if not raw:
-                        break
-                    line = _strip_ansi(raw.decode(errors="replace")).strip()
-                    if line:
-                        lines.append(line)
-                        yield line
-            async for line in asyncio.wait_for(_reader().__aiter__().__anext__(), timeout):
-                pass
-        except (asyncio.TimeoutError, StopAsyncIteration):
-            pass
-        return lines
 
     async def _send(self, proc, cmd, delay=0.3):
         log.info(f"[PAIR] >>> {cmd}")

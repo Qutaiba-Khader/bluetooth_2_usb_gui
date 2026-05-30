@@ -26,13 +26,6 @@ class SerialDaemon:
         self.reader = None
         self.writer = None
 
-    async def open(self):
-        log.info(f"Opening {SERIAL_DEV}")
-        r, w = await asyncio.open_connection(host=None, port=None)
-        # asyncio doesn't support serial natively, use raw fd
-        self.fd = os.open(SERIAL_DEV, os.O_RDWR | os.O_NOCTTY)
-        log.info("Serial daemon running")
-
     async def respond(self, obj):
         line = json.dumps(obj, separators=(",", ":")) + "\n"
         data = line.encode("utf-8")
@@ -117,6 +110,10 @@ class SerialDaemon:
             elif cmd == "hotspot_start":
                 result = await self.net.start_hotspot()
                 await self.respond(result)
+
+            elif cmd == "hotspot_stop":
+                await self.net._stop_hotspot()
+                await self.respond({"success": True})
 
             elif cmd == "ping":
                 await self.respond({"ok": True, "pong": True})

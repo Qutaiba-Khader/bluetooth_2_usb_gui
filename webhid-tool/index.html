@@ -49,22 +49,21 @@
       <aside class="panel panel-net">
         <section class="section">
           <div class="section-head">
-            <h2>WiFi</h2>
-            <button id="wifi-toggle" class="btn btn-success btn-sm" onclick="toggleWifi()">Enable</button>
+            <h2>Network</h2>
           </div>
           <div class="net-status-card" style="margin-bottom:12px">
-            <div class="net-row"><span class="net-label">Status</span><span id="net-conn" class="net-val off">Off</span></div>
+            <div class="net-row"><span class="net-label">Status</span><span id="net-conn" class="net-val off">--</span></div>
             <div class="net-row"><span class="net-label">SSID</span><span id="net-ssid" class="net-val">--</span></div>
             <div class="net-row" style="border:none"><span class="net-label">IP</span><span id="net-ip" class="net-val mono">--</span></div>
           </div>
 
-          <div id="wifi-sections" class="disabled-section">
+          <div id="wifi-sections">
             <!-- WiFi Networks -->
             <div class="section-head"><h3>Networks</h3>
               <button class="btn btn-ghost btn-sm" onclick="doWifiScan()">Scan</button>
             </div>
             <div id="wifi-network-list" class="wifi-list">
-              <div class="empty-sm">Enable WiFi to scan</div>
+              <div class="empty-sm">Click Scan to find networks</div>
             </div>
 
             <!-- Hotspot -->
@@ -79,7 +78,6 @@
               </div>
             </div>
           </div>
-          <p class="hint" style="margin-top:8px">WiFi is off by default. Enable for updates, flashing, or hotspot access.</p>
         </section>
       </aside>
 
@@ -211,7 +209,6 @@
         const r = await serial.getNetworkStatus();
         if (!r || !r.data) return;
         const s = r.data;
-        wifiOn = s.connected || true;
         hotspotActive = s.hotspot_active;
 
         document.getElementById('net-conn').textContent = s.connected ? 'Connected' : 'Disconnected';
@@ -219,15 +216,10 @@
         document.getElementById('net-ssid').textContent = s.connected ? s.ssid : '--';
         document.getElementById('net-ip').textContent = s.ip || '--';
 
-        const sections = document.getElementById('wifi-sections');
-        sections.classList.add('enabled');
-
         document.getElementById('hotspot-start').style.display = hotspotActive ? 'none' : '';
         document.getElementById('hotspot-stop').style.display = hotspotActive ? '' : 'none';
       } catch {}
     };
-
-    window.toggleWifi = function () {};
 
     window.doWifiScan = async function () {
       const el = document.getElementById('wifi-network-list');
@@ -293,8 +285,8 @@
     window.doHotspotStop = async function () {
       toast('Stopping hotspot...', 'info');
       try {
-        await serial.connectWifi('', '');
-        toast('Hotspot stopped', 'info');
+        const r = await serial.stopHotspot();
+        toast(r.success ? 'Hotspot stopped' : 'Stop failed', r.success ? 'info' : 'error');
         await refreshWifi();
       } catch (e) { toast('Stop failed: ' + e.message, 'error'); }
     };
@@ -305,7 +297,7 @@
       const icon = ICONS[dev.type] || ICONS.device;
       const connected = dev.connected;
       const trusted = dev.trusted;
-      const supported = dev.hidSupported !== false;
+      const supported = dev.supported !== false;
 
       let statusDot = 'disconnected';
       let statusText = 'Disconnected';
@@ -372,10 +364,10 @@
       btn.disabled = true;
       document.getElementById('scan-text').textContent = 'Scanning...';
       btn.classList.add('scanning');
-      el.innerHTML = '<div class="empty"><span class="scan-dot"></span> Scanning... (~10 seconds)</div>';
+      el.innerHTML = '<div class="empty"><span class="scan-dot"></span> Scanning...</div>';
       try {
         await serial.scanStart();
-        await new Promise(r => setTimeout(r, 10000));
+        await new Promise(r => setTimeout(r, 6000));
         await serial.scanStop();
         const devices = await serial.scanResults();
         if (devices.length === 0) {

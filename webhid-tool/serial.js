@@ -2,10 +2,11 @@ const VID = 0x1d6b;
 
 let port = null;
 let reader = null;
-let writer = null;
 let readBuf = "";
-let pendingResolve = null;
+const responseQueue = [];
 let onDisconnectCb = null;
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
 
 export function isSupported() {
   return "serial" in navigator;
@@ -25,7 +26,6 @@ export async function connect(onDisconnect) {
   port.addEventListener("disconnect", () => {
     port = null;
     reader = null;
-    writer = null;
     if (onDisconnectCb) onDisconnectCb();
   });
 
@@ -39,7 +39,7 @@ async function startReader() {
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        readBuf += new TextDecoder().decode(value);
+        readBuf += decoder.decode(value, { stream: true });
         processBuffer();
       }
     } catch (e) {
@@ -59,10 +59,8 @@ function processBuffer() {
     if (!line) continue;
     try {
       const msg = JSON.parse(line);
-      if (pendingResolve) {
-        const resolve = pendingResolve;
-        pendingResolve = null;
-        resolve(msg);
+      if (responseQueue.length > 0) {
+        responseQueue.shift()(msg);
       }
     } catch {}
   }
@@ -73,18 +71,20 @@ async function send(obj, timeout = 30000) {
   const data = JSON.stringify(obj) + "\n";
   const w = port.writable.getWriter();
   try {
-    await w.write(new TextEncoder().encode(data));
+    await w.write(encoder.encode(data));
   } finally {
     w.releaseLock();
   }
   return new Promise((resolve, reject) => {
-    pendingResolve = resolve;
-    setTimeout(() => {
-      if (pendingResolve === resolve) {
-        pendingResolve = null;
-        reject(new Error("Timeout"));
-      }
+    const timer = setTimeout(() => {
+      const idx = responseQueue.indexOf(resolve);
+      if (idx !== -1) responseQueue.splice(idx, 1);
+      reject(new Error("Timeout"));
     }, timeout);
+    responseQueue.push(function(msg) {
+      clearTimeout(timer);
+      resolve(msg);
+    });
   });
 }
 
@@ -102,7 +102,7 @@ export async function scanStart() {
 }
 
 export async function scanStop() {
-  return send({ cmd: "scan_stop" });
+  return send({ cmd: "scan_stop" }, 60000);
 }
 
 export async function scanResults() {
@@ -153,6 +153,10 @@ export async function connectWifi(ssid, password) {
 
 export async function startHotspot() {
   return send({ cmd: "hotspot_start" }, 15000);
+}
+
+export async function stopHotspot() {
+  return send({ cmd: "hotspot_stop" }, 10000);
 }
 
 export async function ping() {
