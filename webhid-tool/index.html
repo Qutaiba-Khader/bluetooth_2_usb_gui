@@ -45,41 +45,30 @@
 
     <!-- Main UI (shown when USB connected) -->
     <main id="device-view" class="layout" style="display:none">
-      <!-- LEFT: WiFi -->
+      <!-- LEFT: Network -->
       <aside class="panel panel-net">
         <section class="section">
           <div class="section-head">
-            <h2>WiFi</h2>
-            <button id="wifi-toggle" class="btn btn-success btn-sm" onclick="toggleWifi()">Enable</button>
+            <h2>Network</h2>
           </div>
-          <div class="net-status-card" style="margin-bottom:12px">
+
+          <div id="net-status" class="net-status-card">
             <div class="net-row"><span class="net-label">Status</span><span id="net-conn" class="net-val off">Off</span></div>
             <div class="net-row"><span class="net-label">SSID</span><span id="net-ssid" class="net-val">--</span></div>
-            <div class="net-row" style="border:none"><span class="net-label">IP</span><span id="net-ip" class="net-val mono">--</span></div>
+            <div class="net-row"><span class="net-label">IP</span><span id="net-ip" class="net-val mono">--</span></div>
+            <div class="net-row"><span class="net-label">Hotspot</span><span id="net-ap" class="net-val off">Off</span></div>
           </div>
 
-          <div id="wifi-sections" class="disabled-section">
-            <!-- WiFi Networks -->
-            <div class="section-head"><h3>Networks</h3>
-              <button class="btn btn-ghost btn-sm" onclick="doWifiScan()">Scan</button>
-            </div>
-            <div id="wifi-network-list" class="wifi-list">
-              <div class="empty-sm">Enable WiFi to scan</div>
-            </div>
-
-            <!-- Hotspot -->
-            <div class="section-head" style="margin-top:16px"><h3>Hotspot</h3></div>
-            <div class="net-status-card hotspot-card">
-              <input type="text" id="hotspot-ssid" class="wifi-input" value="Bluetooth To USB" style="margin-top:0">
-              <input type="text" id="hotspot-pass" class="wifi-input" value="1111111111">
-              <p class="hint" style="margin-top:6px;margin-bottom:0">Access point at 10.42.0.1</p>
-              <div style="margin-top:8px">
-                <button id="hotspot-start" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;border-color:var(--warning);color:var(--warning)" onclick="doHotspot()">Start Hotspot</button>
-                <button id="hotspot-stop" class="btn btn-danger btn-sm" style="display:none;width:100%;justify-content:center" onclick="doHotspotStop()">Stop Hotspot</button>
-              </div>
-            </div>
+          <div class="section-head" style="margin-top:20px">
+            <h3>WiFi Networks</h3>
+            <button class="btn btn-ghost btn-sm" onclick="doWifiScan()">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Scan
+            </button>
           </div>
-          <p class="hint" style="margin-top:8px">WiFi is off by default. Enable for updates, flashing, or hotspot access.</p>
+          <div id="wifi-network-list" class="wifi-list">
+            <div class="empty-sm">Click Scan to find networks</div>
+          </div>
         </section>
       </aside>
 
@@ -199,57 +188,30 @@
       }
     };
 
-    // --- WiFi ---
-
-    let wifiOn = false;
-    let hotspotActive = false;
+    // --- Network ---
 
     window.refreshWifi = async function () {
       if (!hid.isConnected()) return;
       try {
         const w = await hid.getWifiStatus();
         if (!w) return;
-        wifiOn = w.radioOn;
         const conn = w.connected;
-        hotspotActive = conn && (w.ssid === 'Bluetooth To USB' || w.ssid === document.getElementById('hotspot-ssid').value);
 
-        document.getElementById('net-conn').textContent = conn ? 'Connected' : (wifiOn ? 'On' : 'Off');
+        document.getElementById('net-conn').textContent = conn ? 'Connected' : 'Disconnected';
         document.getElementById('net-conn').className = 'net-val ' + (conn ? 'on' : 'off');
         document.getElementById('net-ssid').textContent = conn ? w.ssid : '--';
         document.getElementById('net-ip').textContent = w.ip || '--';
 
-        const toggle = document.getElementById('wifi-toggle');
-        toggle.textContent = wifiOn ? 'Disable' : 'Enable';
-        toggle.className = 'btn btn-sm ' + (wifiOn ? 'btn-danger' : 'btn-success');
-
-        const sections = document.getElementById('wifi-sections');
-        sections.classList.toggle('enabled', wifiOn);
-
-        document.getElementById('hotspot-start').style.display = hotspotActive ? 'none' : '';
-        document.getElementById('hotspot-stop').style.display = hotspotActive ? '' : 'none';
-
-        if (wifiOn && !conn) {
-          document.getElementById('wifi-network-list').innerHTML = '<div class="empty-sm">Click Scan to find networks</div>';
+        const hotspot = conn && (w.ssid === 'Bluetooth To USB');
+        const apEl = document.getElementById('net-ap');
+        if (hotspot) {
+          apEl.textContent = 'Active (10.42.0.1)';
+          apEl.className = 'net-val on';
+        } else {
+          apEl.textContent = 'Off';
+          apEl.className = 'net-val off';
         }
       } catch {}
-    };
-
-    window.toggleWifi = async function () {
-      if (wifiOn) {
-        toast('Disabling WiFi...', 'info');
-        try {
-          await hid.disableWifi();
-          toast('WiFi disabled', 'info');
-        } catch { toast('Command sent', 'info'); }
-      } else {
-        toast('Enabling WiFi — wait 10s...', 'info');
-        try {
-          hid.enableWifi('', '').catch(() => {});
-          await new Promise(r => setTimeout(r, 10000));
-          toast('WiFi should be on now', 'success');
-        } catch { toast('Command sent', 'info'); }
-      }
-      try { await refreshWifi(); } catch {}
     };
 
     window.doWifiScan = async function () {
@@ -307,30 +269,6 @@
         await refreshWifi();
       } catch (e) { toast('Failed: ' + e.message, 'error'); }
     }
-
-    window.doHotspot = async function () {
-      const ssid = document.getElementById('hotspot-ssid').value.trim() || 'Bluetooth To USB';
-      const pass = document.getElementById('hotspot-pass').value || '1111111111';
-      toast('Starting hotspot...', 'info');
-      try {
-        const r = await hid.startHotspot(ssid, pass);
-        if (r.status === hid.STATUS.OK) {
-          toast('Hotspot active — ' + ssid + ' / 10.42.0.1', 'success');
-        } else {
-          toast('Hotspot failed: ' + parseErrorData(r.data), 'error');
-        }
-        await refreshWifi();
-      } catch (e) { toast('Hotspot failed: ' + e.message, 'error'); }
-    };
-
-    window.doHotspotStop = async function () {
-      toast('Stopping hotspot...', 'info');
-      try {
-        await hid.disableWifi();
-        toast('Hotspot stopped', 'info');
-        await refreshWifi();
-      } catch (e) { toast('Stop failed: ' + e.message, 'error'); }
-    };
 
     // --- Devices ---
 
