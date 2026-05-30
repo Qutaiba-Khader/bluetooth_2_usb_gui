@@ -67,7 +67,7 @@
             <h3>Connect WiFi</h3>
           </div>
           <div id="wifi-history" class="wifi-list" style="margin-bottom:6px"></div>
-          <div class="wifi-item hotspot-item" onclick="doHotspot()" title="Start hotspot: SSID 'Bluetooth To USB' / Pass '1111111111' / IP 10.42.0.1">
+          <div class="wifi-item hotspot-item" onclick="selectHotspot()" title="Pre-fill hotspot defaults — edit SSID/password then click Hotspot">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="flex-shrink:0"><path d="M12 11c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 2c0-3.31-2.69-6-6-6s-6 2.69-6 6c0 2.22 1.21 4.15 3 5.19l1-1.74c-1.19-.7-2-1.97-2-3.45 0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.48-.81 2.75-2 3.45l1 1.74c1.79-1.04 3-2.97 3-5.19zM12 3C6.48 3 2 7.48 2 13c0 3.7 2.01 6.92 4.99 8.65l1-1.73C5.61 18.53 4 15.96 4 13c0-4.42 3.58-8 8-8s8 3.58 8 8c0 2.96-1.61 5.53-4 6.92l1 1.73c2.99-1.73 5-4.95 5-8.65 0-5.52-4.48-10-10-10z"/></svg>
             <span class="wifi-ssid">Hotspot Mode</span>
             <span style="font-size:0.68rem;opacity:0.5">10.42.0.1</span>
@@ -75,10 +75,11 @@
           <input type="text" id="wifi-ssid" class="wifi-input" placeholder="SSID (network name)" style="margin-top:0">
           <input type="password" id="wifi-pass" class="wifi-input" placeholder="Password">
           <div class="wifi-buttons">
-            <button id="wifi-enable-btn" class="btn btn-success btn-sm" onclick="doWifiEnable()">Enable</button>
-            <button id="wifi-disable-btn" class="btn btn-danger btn-sm" onclick="doWifiDisable()">Disable</button>
+            <button id="wifi-enable-btn" class="btn btn-success btn-sm" onclick="doWifiEnable()">Connect</button>
+            <button id="wifi-hotspot-btn" class="btn btn-ghost btn-sm" style="border-color:var(--warning);color:var(--warning)" onclick="doHotspot()">Hotspot</button>
+            <button id="wifi-disable-btn" class="btn btn-danger btn-sm" onclick="doWifiDisable()">Off</button>
           </div>
-          <p class="hint" style="margin-top:10px">WiFi is off by default. Pick a saved network or enter new credentials.</p>
+          <p class="hint" style="margin-top:10px">WiFi is off by default. Pick a saved network, or use Hotspot to create an access point.</p>
 
         </section>
       </aside>
@@ -257,18 +258,29 @@
       }
     };
 
+    window.selectHotspot = function () {
+      document.getElementById('wifi-ssid').value = 'Bluetooth To USB';
+      document.getElementById('wifi-pass').value = '1111111111';
+      document.getElementById('wifi-ssid').focus();
+    };
+
     window.doHotspot = async function () {
-      toast('Starting hotspot...', 'info');
+      const ssid = document.getElementById('wifi-ssid').value.trim() || 'Bluetooth To USB';
+      const pass = document.getElementById('wifi-pass').value || '1111111111';
+      document.getElementById('wifi-hotspot-btn').disabled = true;
+      toast('Starting hotspot "' + ssid + '"...', 'info');
       try {
-        const r = await hid.startHotspot();
+        const r = await hid.startHotspot(ssid, pass);
         if (r.status === hid.STATUS.OK) {
-          toast('Hotspot active — SSID: Bluetooth To USB / IP: 10.42.0.1', 'success');
+          toast('Hotspot active — SSID: ' + ssid + ' / IP: 10.42.0.1', 'success');
         } else {
           toast('Hotspot failed: ' + parseErrorData(r.data), 'error');
         }
         await refreshWifi();
       } catch (e) {
         toast('Hotspot failed: ' + e.message, 'error');
+      } finally {
+        document.getElementById('wifi-hotspot-btn').disabled = false;
       }
     };
 

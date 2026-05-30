@@ -323,9 +323,16 @@ class ConfigDaemon:
         await self.send(self.make_response(STATUS_OK, cmd))
 
     async def cmd_wifi_hotspot(self, cmd, payload):
-        log.info("WiFi hotspot start")
+        ssid = unpack_string(payload, 0, 31) if payload else ""
+        password = unpack_string(payload, 31, 32) if len(payload) > 31 else ""
+        ssid = ssid or "Bluetooth To USB"
+        password = password or "1111111111"
+        log.info(f"WiFi hotspot start: ssid={ssid!r}")
         await self.net._run("radio", "wifi", "on")
         await asyncio.sleep(1)
+        await self.net._run("connection", "modify", "bt2usb-hotspot",
+                            "802-11-wireless.ssid", ssid,
+                            "wifi-sec.psk", password)
         result = await self.net.start_hotspot()
         if result.get("success"):
             await self.send(self.make_response(STATUS_OK, cmd))

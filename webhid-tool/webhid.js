@@ -250,8 +250,13 @@ async function disableWifi() {
   return sendCommand(CMD.WIFI_DISABLE);
 }
 
-async function startHotspot() {
-  return sendCommand(CMD.WIFI_HOTSPOT);
+async function startHotspot(ssid = "", password = "") {
+  const payload = new Uint8Array(63);
+  const ssidBytes = new TextEncoder().encode(ssid.slice(0, 30));
+  const passBytes = new TextEncoder().encode(password.slice(0, 31));
+  payload.set(ssidBytes, 0);
+  payload.set(passBytes, 31);
+  return sendCommand(CMD.WIFI_HOTSPOT, Array.from(payload));
 }
 
 export {
