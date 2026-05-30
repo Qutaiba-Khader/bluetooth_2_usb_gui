@@ -2,7 +2,6 @@
 """WebHID config daemon — reads /dev/hidg3, dispatches BT and WiFi commands."""
 
 import asyncio
-import fcntl
 import logging
 import os
 import struct
@@ -25,7 +24,6 @@ REPORT_ID_CMD = 1
 REPORT_ID_RSP = 2
 VERSION = "1.0.0"
 
-GADGET_HID_WRITE_GET_REPORT = (1 << 30) | (2 << 16) | (ord('g') << 8) | 0x42
 
 CMD_GET_DEVICE_LIST = 0x01
 CMD_GET_DEVICE_INFO = 0x02
@@ -131,17 +129,12 @@ class ConfigDaemon:
     async def send(self, response):
         report = bytes([REPORT_ID_RSP]) + response
         report = report[:REPORT_SIZE].ljust(REPORT_SIZE, b"\x00")
-        buf = struct.pack('<H', len(report)) + report
         loop = asyncio.get_event_loop()
         async with self.write_lock:
             try:
-                await loop.run_in_executor(None, fcntl.ioctl, self.fd, GADGET_HID_WRITE_GET_REPORT, buf)
+                await loop.run_in_executor(None, os.write, self.fd, report)
             except Exception as e:
-                log.error(f"Write error (ioctl): {e}, falling back to write()")
-                try:
-                    await loop.run_in_executor(None, os.write, self.fd, report)
-                except Exception as e2:
-                    log.error(f"Write fallback error: {e2}")
+                log.error(f"Write error: {e}")
 
     async def handle(self, cmd, payload):
         try:

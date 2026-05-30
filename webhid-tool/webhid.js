@@ -43,6 +43,8 @@ let _onDisconnect = null;
 
 function isSupported() { return "hid" in navigator; }
 
+let _pendingResolve = null;
+
 async function connect(onDisconnect) {
   _onDisconnect = onDisconnect || null;
   const filters = [{ vendorId: VID, productId: PID, usagePage: USAGE_PAGE }];
@@ -50,8 +52,10 @@ async function connect(onDisconnect) {
   if (!device) throw new Error("No device selected");
   await device.open();
   hidDevice = device;
+  hidDevice.addEventListener("inputreport", _onInputReport);
   hidDevice.addEventListener("disconnect", () => {
     hidDevice = null;
+    _pendingResolve = null;
     if (typeof _onDisconnect === "function") _onDisconnect();
   });
   return device;
@@ -59,12 +63,32 @@ async function connect(onDisconnect) {
 
 function disconnect() {
   if (hidDevice) {
+    hidDevice.removeEventListener("inputreport", _onInputReport);
     hidDevice.close();
     hidDevice = null;
   }
+  _pendingResolve = null;
 }
 
 function isConnected() { return hidDevice !== null && hidDevice.opened; }
+
+function _onInputReport(event) {
+  if (event.reportId !== REPORT_ID_RSP) return;
+  const view = event.data;
+  if (view.byteLength < 4) return;
+  const response = {
+    status: view.getUint8(0),
+    cmdEcho: view.getUint8(1),
+    seq: view.getUint8(2),
+    total: view.getUint8(3),
+    data: new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4),
+  };
+  if (_pendingResolve) {
+    const resolve = _pendingResolve;
+    _pendingResolve = null;
+    resolve(response);
+  }
+}
 
 async function sendCommand(cmd, payload = []) {
   if (!isConnected()) throw new Error("Not connected");
@@ -73,26 +97,17 @@ async function sendCommand(cmd, payload = []) {
   for (let i = 0; i < payload.length && i < REPORT_SIZE - 1; i++) {
     data[i + 1] = payload[i];
   }
+  const promise = new Promise((resolve, reject) => {
+    _pendingResolve = resolve;
+    setTimeout(() => {
+      if (_pendingResolve === resolve) {
+        _pendingResolve = null;
+        reject(new Error("Response timeout"));
+      }
+    }, 30000);
+  });
   await hidDevice.sendReport(REPORT_ID_CMD, data);
-  for (let attempt = 0; attempt < 20; attempt++) {
-    await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
-    try {
-      const report = await hidDevice.receiveFeatureReport(REPORT_ID_RSP);
-      const view = report.data;
-      if (view.byteLength < 4) continue;
-      const status = view.getUint8(0);
-      const cmdEcho = view.getUint8(1);
-      if (cmdEcho === 0 && status === 0) continue;
-      return {
-        status,
-        cmdEcho,
-        seq: view.getUint8(2),
-        total: view.getUint8(3),
-        data: new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4),
-      };
-    } catch { continue; }
-  }
-  throw new Error("Response timeout");
+  return promise;
 }
 
 function parseMac(bytes, offset) {
