@@ -45,42 +45,59 @@
 
     <!-- Main UI (shown when USB connected) -->
     <main id="device-view" class="layout" style="display:none">
-      <!-- LEFT: WiFi Control -->
+      <!-- LEFT: WiFi + Hotspot -->
       <aside class="panel panel-net">
+        <!-- WiFi Connection -->
         <section class="section">
           <div class="section-head">
             <h2>WiFi</h2>
             <button class="btn btn-ghost btn-sm" onclick="refreshWifi()">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-              Refresh
             </button>
           </div>
 
           <div id="net-status" class="net-status-card">
-            <div class="net-row"><span class="net-label">Radio</span><span id="net-radio" class="net-val off">--</span></div>
-            <div class="net-row"><span class="net-label">Status</span><span id="net-conn" class="net-val">--</span></div>
+            <div class="net-row"><span class="net-label">Status</span><span id="net-conn" class="net-val off">--</span></div>
             <div class="net-row"><span class="net-label">SSID</span><span id="net-ssid" class="net-val">--</span></div>
             <div class="net-row"><span class="net-label">IP</span><span id="net-ip" class="net-val mono">--</span></div>
+            <div class="net-row" style="border:none;padding-top:8px">
+              <span></span>
+              <button class="btn btn-danger btn-sm" onclick="doWifiDisable()">Stop</button>
+            </div>
           </div>
 
-          <div class="section-head" style="margin-top:20px">
-            <h3>Connect WiFi</h3>
-          </div>
-          <div id="wifi-history" class="wifi-list" style="margin-bottom:6px"></div>
-          <div class="wifi-item hotspot-item" onclick="selectHotspot()" title="Pre-fill hotspot defaults — edit SSID/password then click Hotspot">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="flex-shrink:0"><path d="M12 11c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 2c0-3.31-2.69-6-6-6s-6 2.69-6 6c0 2.22 1.21 4.15 3 5.19l1-1.74c-1.19-.7-2-1.97-2-3.45 0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.48-.81 2.75-2 3.45l1 1.74c1.79-1.04 3-2.97 3-5.19zM12 3C6.48 3 2 7.48 2 13c0 3.7 2.01 6.92 4.99 8.65l1-1.73C5.61 18.53 4 15.96 4 13c0-4.42 3.58-8 8-8s8 3.58 8 8c0 2.96-1.61 5.53-4 6.92l1 1.73c2.99-1.73 5-4.95 5-8.65 0-5.52-4.48-10-10-10z"/></svg>
-            <span class="wifi-ssid">Hotspot Mode</span>
-            <span style="font-size:0.68rem;opacity:0.5">10.42.0.1</span>
-          </div>
-          <input type="text" id="wifi-ssid" class="wifi-input" placeholder="SSID (network name)" style="margin-top:0">
-          <input type="password" id="wifi-pass" class="wifi-input" placeholder="Password">
-          <div class="wifi-buttons">
-            <button id="wifi-enable-btn" class="btn btn-success btn-sm" onclick="doWifiEnable()">Connect</button>
-            <button id="wifi-hotspot-btn" class="btn btn-ghost btn-sm" style="border-color:var(--warning);color:var(--warning)" onclick="doHotspot()">Hotspot</button>
-            <button id="wifi-disable-btn" class="btn btn-danger btn-sm" onclick="doWifiDisable()">Off</button>
-          </div>
-          <p class="hint" style="margin-top:10px">WiFi is off by default. Pick a saved network, or use Hotspot to create an access point.</p>
+          <!-- Saved networks -->
+          <div id="wifi-history" class="wifi-list" style="margin-top:12px"></div>
 
+          <!-- Add network -->
+          <div id="wifi-add-btn-wrap" style="margin-top:8px">
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="showAddWifi()">+ Add Network</button>
+          </div>
+          <div id="wifi-add-form" style="display:none;margin-top:8px">
+            <input type="text" id="wifi-ssid" class="wifi-input" placeholder="SSID (network name)" style="margin-top:0">
+            <input type="password" id="wifi-pass" class="wifi-input" placeholder="Password">
+            <div class="wifi-buttons">
+              <button class="btn btn-success btn-sm" onclick="doWifiEnable()">Connect</button>
+              <button class="btn btn-ghost btn-sm" onclick="hideAddWifi()">Cancel</button>
+            </div>
+          </div>
+          <p class="hint" style="margin-top:8px">WiFi is off by default. Saved networks: up to 3.</p>
+        </section>
+
+        <!-- Hotspot -->
+        <section class="section">
+          <div class="section-head">
+            <h2>Hotspot</h2>
+          </div>
+          <div class="net-status-card hotspot-card">
+            <input type="text" id="hotspot-ssid" class="wifi-input" value="Bluetooth To USB" style="margin-top:0">
+            <input type="text" id="hotspot-pass" class="wifi-input" value="1111111111">
+            <p class="hint" style="margin-top:6px;margin-bottom:0">Access point at 10.42.0.1</p>
+            <div class="wifi-buttons" style="margin-top:8px">
+              <button class="btn btn-ghost btn-sm" style="border-color:var(--warning);color:var(--warning)" onclick="doHotspot()">Start</button>
+              <button class="btn btn-danger btn-sm" onclick="doHotspotStop()">Stop</button>
+            </div>
+          </div>
         </section>
       </aside>
 
@@ -223,74 +240,94 @@
       const history = getWifiHistory();
       if (history.length === 0) { el.innerHTML = ''; return; }
       el.innerHTML = history.map(h => `
-        <div class="wifi-item" onclick="selectWifi('${h.ssid.replace(/'/g, "\\'")}')">
+        <div class="wifi-item" onclick="connectSaved('${h.ssid.replace(/'/g, "\\'")}')">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="opacity:0.5;flex-shrink:0"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.237 4.237 0 00-6 0zm-4-4l2 2a7.074 7.074 0 0110 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
           <span class="wifi-ssid">${h.ssid}</span>
         </div>`).join('');
     }
 
-    window.selectWifi = function (ssid) {
+    window.showAddWifi = function () {
+      document.getElementById('wifi-add-btn-wrap').style.display = 'none';
+      document.getElementById('wifi-add-form').style.display = '';
+      document.getElementById('wifi-ssid').focus();
+    };
+
+    window.hideAddWifi = function () {
+      document.getElementById('wifi-add-form').style.display = 'none';
+      document.getElementById('wifi-add-btn-wrap').style.display = '';
+    };
+
+    window.connectSaved = async function (ssid) {
       const entry = getWifiHistory().find(h => h.ssid === ssid);
-      if (entry) {
-        document.getElementById('wifi-ssid').value = entry.ssid;
-        document.getElementById('wifi-pass').value = entry.pass;
+      if (!entry) return;
+      toast('Connecting to ' + ssid + '...', 'info');
+      try {
+        const r = await hid.enableWifi(entry.ssid, entry.pass);
+        if (r.status === hid.STATUS.OK) {
+          toast('Connected to ' + ssid, 'success');
+        } else {
+          toast('Failed: ' + parseErrorData(r.data), 'error');
+        }
+        await refreshWifi();
+      } catch (e) {
+        toast('Failed: ' + e.message, 'error');
       }
     };
 
     window.doWifiEnable = async function () {
       const ssid = document.getElementById('wifi-ssid').value.trim();
       const pass = document.getElementById('wifi-pass').value;
-      if (ssid) saveWifiHistory(ssid, pass);
-      document.getElementById('wifi-enable-btn').disabled = true;
-      toast(ssid ? 'Enabling WiFi and connecting to ' + ssid + '...' : 'Enabling WiFi...', 'info');
+      if (!ssid) { toast('Enter an SSID', 'error'); return; }
+      saveWifiHistory(ssid, pass);
+      hideAddWifi();
+      toast('Connecting to ' + ssid + '...', 'info');
       try {
         const r = await hid.enableWifi(ssid, pass);
         if (r.status === hid.STATUS.OK) {
-          toast('WiFi enabled' + (ssid ? ' — connected to ' + ssid : ''), 'success');
+          toast('Connected to ' + ssid, 'success');
         } else {
           toast('WiFi failed: ' + parseErrorData(r.data), 'error');
         }
         await refreshWifi();
       } catch (e) {
         toast('WiFi failed: ' + e.message, 'error');
-      } finally {
-        document.getElementById('wifi-enable-btn').disabled = false;
       }
     };
 
-    window.selectHotspot = function () {
-      document.getElementById('wifi-ssid').value = 'Bluetooth To USB';
-      document.getElementById('wifi-pass').value = '1111111111';
-      document.getElementById('wifi-ssid').focus();
-    };
-
     window.doHotspot = async function () {
-      const ssid = document.getElementById('wifi-ssid').value.trim() || 'Bluetooth To USB';
-      const pass = document.getElementById('wifi-pass').value || '1111111111';
-      document.getElementById('wifi-hotspot-btn').disabled = true;
+      const ssid = document.getElementById('hotspot-ssid').value.trim() || 'Bluetooth To USB';
+      const pass = document.getElementById('hotspot-pass').value || '1111111111';
       toast('Starting hotspot "' + ssid + '"...', 'info');
       try {
         const r = await hid.startHotspot(ssid, pass);
         if (r.status === hid.STATUS.OK) {
-          toast('Hotspot active — SSID: ' + ssid + ' / IP: 10.42.0.1', 'success');
+          toast('Hotspot active — ' + ssid + ' / 10.42.0.1', 'success');
         } else {
           toast('Hotspot failed: ' + parseErrorData(r.data), 'error');
         }
         await refreshWifi();
       } catch (e) {
         toast('Hotspot failed: ' + e.message, 'error');
-      } finally {
-        document.getElementById('wifi-hotspot-btn').disabled = false;
+      }
+    };
+
+    window.doHotspotStop = async function () {
+      try {
+        await hid.disableWifi();
+        toast('Hotspot stopped', 'info');
+        await refreshWifi();
+      } catch (e) {
+        toast('Stop failed: ' + e.message, 'error');
       }
     };
 
     window.doWifiDisable = async function () {
       try {
         await hid.disableWifi();
-        toast('WiFi disabled', 'info');
+        toast('WiFi stopped', 'info');
         await refreshWifi();
       } catch (e) {
-        toast('WiFi disable failed: ' + e.message, 'error');
+        toast('WiFi stop failed: ' + e.message, 'error');
       }
     };
 
@@ -510,11 +547,6 @@
       document.getElementById('connect-btn').disabled = true;
     }
     renderWifiHistory();
-    const lastUsed = getWifiHistory()[0];
-    if (lastUsed) {
-      document.getElementById('wifi-ssid').value = lastUsed.ssid;
-      document.getElementById('wifi-pass').value = lastUsed.pass;
-    }
   </script>
 </body>
 </html>
