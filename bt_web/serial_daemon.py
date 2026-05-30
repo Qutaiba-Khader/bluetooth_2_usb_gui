@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+import tty
 
 sys.path.insert(0, os.path.dirname(__file__))
 from bt_manager import BluetoothManager
@@ -156,7 +157,8 @@ class SerialDaemon:
 async def main():
     daemon = SerialDaemon()
     daemon.fd = os.open(SERIAL_DEV, os.O_RDWR | os.O_NOCTTY)
-    log.info(f"Serial daemon running on {SERIAL_DEV}")
+    tty.setraw(daemon.fd)
+    log.info(f"Serial daemon running on {SERIAL_DEV} (raw mode)")
     await daemon.read_loop()
 
 
