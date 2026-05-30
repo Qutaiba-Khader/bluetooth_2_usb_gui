@@ -186,6 +186,12 @@ body {
   font-size: 0.9rem; font-family: inherit; outline: none;
 }
 .wifi-input:focus { border-color: var(--primary); }
+.wifi-input::placeholder { color: var(--text-muted); }
+
+.hotspot-card {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.04);
+}
 
 /* Toast */
 #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 100; display: flex; flex-direction: column; gap: 8px; }

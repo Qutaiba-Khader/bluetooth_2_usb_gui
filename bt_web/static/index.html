@@ -30,29 +30,36 @@
     </header>
 
     <main class="layout">
-      <!-- LEFT: Network -->
+      <!-- LEFT: WiFi -->
       <aside class="panel panel-net">
         <section class="section">
           <div class="section-head">
-            <h2>Network</h2>
+            <h2>WiFi</h2>
           </div>
-
-          <div id="net-status" class="net-status-card">
+          <div class="net-status-card" style="margin-bottom:12px">
             <div class="net-row"><span class="net-label">Status</span><span id="net-conn" class="net-val">--</span></div>
             <div class="net-row"><span class="net-label">SSID</span><span id="net-ssid" class="net-val">--</span></div>
-            <div class="net-row"><span class="net-label">IP</span><span id="net-ip" class="net-val mono">--</span></div>
-            <div class="net-row"><span class="net-label">Hotspot</span><span id="net-ap" class="net-val">--</span></div>
+            <div class="net-row" style="border:none"><span class="net-label">IP</span><span id="net-ip" class="net-val mono">--</span></div>
           </div>
 
-          <div class="section-head" style="margin-top:20px">
-            <h3>WiFi Networks</h3>
-            <button id="wifi-scan-btn" class="btn btn-ghost btn-sm" onclick="scanWifi()">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-              Scan
-            </button>
+          <!-- WiFi Networks -->
+          <div class="section-head"><h3>Networks</h3>
+            <button id="wifi-scan-btn" class="btn btn-ghost btn-sm" onclick="scanWifi()">Scan</button>
           </div>
           <div id="wifi-list" class="wifi-list">
             <div class="empty-sm">Click Scan to find networks</div>
+          </div>
+
+          <!-- Hotspot -->
+          <div class="section-head" style="margin-top:16px"><h3>Hotspot</h3></div>
+          <div class="net-status-card hotspot-card">
+            <input type="text" id="hotspot-ssid" class="wifi-input" value="Bluetooth To USB" style="margin-top:0">
+            <input type="text" id="hotspot-pass" class="wifi-input" value="1111111111">
+            <p class="hint" style="margin-top:6px;margin-bottom:0">Access point at 10.42.0.1</p>
+            <div style="margin-top:8px">
+              <button id="hotspot-start" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;border-color:var(--warning);color:var(--warning)" onclick="startHotspot()">Start Hotspot</button>
+              <button id="hotspot-stop" class="btn btn-danger btn-sm" style="display:none;width:100%;justify-content:center" onclick="stopHotspot()">Stop Hotspot</button>
+            </div>
           </div>
         </section>
       </aside>

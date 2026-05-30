@@ -320,15 +320,28 @@ async function loadNetStatus() {
     document.getElementById("net-conn").className = "net-val " + (s.connected ? "on" : "off");
     document.getElementById("net-ssid").textContent = s.connected ? s.ssid : "--";
     document.getElementById("net-ip").textContent = s.ip || "--";
-    const apEl = document.getElementById("net-ap");
-    if (s.hotspot_active) {
-      apEl.textContent = "Active (10.42.0.1)";
-      apEl.className = "net-val on";
-    } else {
-      apEl.textContent = "Off";
-      apEl.className = "net-val off";
-    }
+
+    document.getElementById("hotspot-start").style.display = s.hotspot_active ? "none" : "";
+    document.getElementById("hotspot-stop").style.display = s.hotspot_active ? "" : "none";
   } catch {}
+}
+
+async function startHotspot() {
+  toast("Starting hotspot...", "info");
+  try {
+    const r = await api("/hotspot/start", "POST");
+    toast(r.success ? "Hotspot active" : "Hotspot failed", r.success ? "success" : "error");
+    loadNetStatus();
+  } catch { toast("Hotspot failed", "error"); }
+}
+
+async function stopHotspot() {
+  toast("Stopping hotspot...", "info");
+  try {
+    await api("/wifi/disconnect", "POST");
+    toast("Hotspot stopped", "info");
+    loadNetStatus();
+  } catch { toast("Stop failed", "error"); }
 }
 
 function signalBars(signal) {
