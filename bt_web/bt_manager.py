@@ -153,8 +153,26 @@ class BluetoothManager:
 
     # --- Scan (live streaming) ---
 
+    async def _stop_b2u(self):
+        proc = await asyncio.create_subprocess_exec(
+            "systemctl", "stop", "bluetooth_2_usb",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+        await asyncio.sleep(1)
+
+    async def _start_b2u(self):
+        proc = await asyncio.create_subprocess_exec(
+            "systemctl", "start", "bluetooth_2_usb",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+
     async def scan_start(self):
         await self.scan_stop()
+        await self._stop_b2u()
         await self._run("power", "on", timeout=3)
         await self._run("pairable", "on", timeout=3)
         self._scan_proc = await asyncio.create_subprocess_exec(
@@ -162,7 +180,7 @@ class BluetoothManager:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        log.info("[SCAN] Started background scan")
+        log.info("[SCAN] Started background scan (bt2usb stopped)")
 
     async def scan_stop(self):
         if self._scan_proc:
@@ -173,7 +191,8 @@ class BluetoothManager:
                 pass
             self._scan_proc = None
         await self._run("scan", "off", timeout=5)
-        log.info("[SCAN] Stopped")
+        await self._start_b2u()
+        log.info("[SCAN] Stopped (bt2usb restarted)")
 
     async def scan_results(self):
         output = await self._run("devices")
