@@ -155,10 +155,8 @@ class BluetoothManager:
 
     async def scan_start(self):
         await self.scan_stop()
-        await self._run("power", "on", timeout=5)
-        await self._run("pairable", "on", timeout=5)
-        await self._run("agent", "NoInputNoOutput", timeout=5)
-        await self._run("default-agent", timeout=5)
+        await self._run("power", "on", timeout=3)
+        await self._run("pairable", "on", timeout=3)
         self._scan_proc = await asyncio.create_subprocess_exec(
             "bluetoothctl", "scan", "on",
             stdout=asyncio.subprocess.PIPE,

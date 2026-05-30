@@ -132,7 +132,12 @@ class ConfigDaemon:
         loop = asyncio.get_event_loop()
         async with self.write_lock:
             try:
-                await loop.run_in_executor(None, os.write, self.fd, report)
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, os.write, self.fd, report),
+                    timeout=2.0,
+                )
+            except asyncio.TimeoutError:
+                log.warning("Write timed out — host not reading IN endpoint")
             except Exception as e:
                 log.error(f"Write error: {e}")
 
