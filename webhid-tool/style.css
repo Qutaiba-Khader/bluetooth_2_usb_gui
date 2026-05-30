@@ -191,6 +191,16 @@ body {
   background: rgba(245, 158, 11, 0.04);
 }
 
+.disabled-section {
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.disabled-section.enabled {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .wifi-buttons { display: flex; gap: 8px; margin-top: 10px; }
 .wifi-buttons .btn { flex: 1; justify-content: center; }
 
