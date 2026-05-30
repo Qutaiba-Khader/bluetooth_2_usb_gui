@@ -8,13 +8,17 @@ echo "[+] Creating bt_web directory..."
 mkdir -p "$DIR/static"
 
 echo "[+] Copying application files..."
-cp "$SCRIPT_DIR/main.py" "$DIR/"
-cp "$SCRIPT_DIR/bt_manager.py" "$DIR/"
-cp "$SCRIPT_DIR/net_manager.py" "$DIR/"
-cp "$SCRIPT_DIR/webhid_daemon.py" "$DIR/"
-cp "$SCRIPT_DIR/static/index.html" "$DIR/static/"
-cp "$SCRIPT_DIR/static/style.css" "$DIR/static/"
-cp "$SCRIPT_DIR/static/app.js" "$DIR/static/"
+if [ "$SCRIPT_DIR" != "$DIR" ]; then
+  cp "$SCRIPT_DIR/main.py" "$DIR/"
+  cp "$SCRIPT_DIR/bt_manager.py" "$DIR/"
+  cp "$SCRIPT_DIR/net_manager.py" "$DIR/"
+  cp "$SCRIPT_DIR/webhid_daemon.py" "$DIR/"
+  cp "$SCRIPT_DIR/static/index.html" "$DIR/static/"
+  cp "$SCRIPT_DIR/static/style.css" "$DIR/static/"
+  cp "$SCRIPT_DIR/static/app.js" "$DIR/static/"
+else
+  echo "    Source and destination are the same — skipping copy"
+fi
 
 echo "[+] Creating virtual environment..."
 python3 -m venv "$DIR/venv"
