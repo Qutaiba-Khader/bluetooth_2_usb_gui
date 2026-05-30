@@ -197,7 +197,15 @@ async function getScanResults() {
 async function pairDevice(mac, addrType = 0) {
   const r = await sendCommand(CMD.PAIR_DEVICE, [...macToBytes(mac), addrType]);
   if (r.status === STATUS.BUSY) {
-    return waitForResponse(45000);
+    return new Promise((resolve, reject) => {
+      _pendingResolve = resolve;
+      setTimeout(() => {
+        if (_pendingResolve === resolve) {
+          _pendingResolve = null;
+          reject(new Error("Pairing timeout"));
+        }
+      }, 45000);
+    });
   }
   return r;
 }
