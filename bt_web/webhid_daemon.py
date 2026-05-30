@@ -70,10 +70,11 @@ def pack_string(s, length):
 
 
 def unpack_string(data, offset, length):
-    end = data.find(b"\x00", offset, offset + length)
-    if end == -1:
-        end = offset + length
-    return data[offset:end].decode("utf-8", errors="replace")
+    chunk = data[offset:offset + length]
+    end = chunk.find(b"\x00")
+    if end != -1:
+        chunk = chunk[:end]
+    return chunk.decode("utf-8", errors="replace").strip()
 
 
 def pack_device(dev):
