@@ -153,36 +153,19 @@ class BluetoothManager:
 
     # --- Scan (live streaming) ---
 
-    async def _stop_b2u(self):
+    async def _systemctl(self, action, service="bluetooth_2_usb"):
         proc = await asyncio.create_subprocess_exec(
-            "systemctl", "stop", "bluetooth_2_usb",
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await proc.wait()
-        await asyncio.sleep(1)
-
-    async def _start_b2u(self):
-        proc = await asyncio.create_subprocess_exec(
-            "systemctl", "start", "bluetooth_2_usb",
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await proc.wait()
-
-    async def scan_start(self):
-        await self.scan_stop()
-        await self._stop_b2u()
-        await self._run("power", "on", timeout=3)
-        await self._run("pairable", "on", timeout=3)
-        self._scan_proc = await asyncio.create_subprocess_exec(
-            "bluetoothctl", "scan", "on",
+            "systemctl", action, service,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        log.info("[SCAN] Started background scan (bt2usb stopped)")
+        stdout, stderr = await proc.communicate()
+        out = stdout.decode().strip()
+        err = stderr.decode().strip()
+        log.info(f"[SVC] systemctl {action} {service}: rc={proc.returncode} {err or out or 'ok'}")
+        return proc.returncode == 0
 
-    async def scan_stop(self):
+    async def scan_start(self):
         if self._scan_proc:
             try:
                 self._scan_proc.kill()
@@ -190,9 +173,43 @@ class BluetoothManager:
             except Exception:
                 pass
             self._scan_proc = None
-        await self._run("scan", "off", timeout=5)
-        await self._start_b2u()
-        log.info("[SCAN] Stopped (bt2usb restarted)")
+
+        await self._systemctl("stop")
+        await asyncio.sleep(2)
+
+        # Keep bluetoothctl alive in interactive mode so BlueZ
+        # maintains the discovery session for the D-Bus client
+        self._scan_proc = await asyncio.create_subprocess_exec(
+            "bluetoothctl",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        self._scan_proc.stdin.write(b"power on\n")
+        await self._scan_proc.stdin.drain()
+        await asyncio.sleep(1)
+        self._scan_proc.stdin.write(b"pairable on\n")
+        await self._scan_proc.stdin.drain()
+        await asyncio.sleep(0.5)
+        self._scan_proc.stdin.write(b"scan on\n")
+        await self._scan_proc.stdin.drain()
+        log.info("[SCAN] Started interactive scan session")
+
+    async def scan_stop(self):
+        if self._scan_proc:
+            try:
+                self._scan_proc.stdin.write(b"scan off\nquit\n")
+                await self._scan_proc.stdin.drain()
+                await asyncio.wait_for(self._scan_proc.communicate(), timeout=5)
+            except Exception:
+                try:
+                    self._scan_proc.kill()
+                    await self._scan_proc.communicate()
+                except Exception:
+                    pass
+            self._scan_proc = None
+        await self._systemctl("start")
+        log.info("[SCAN] Stopped, bt2usb restarted")
 
     async def scan_results(self):
         output = await self._run("devices")
