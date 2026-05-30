@@ -7,7 +7,7 @@ log = logging.getLogger("bt_manager")
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 HID_UUID = "00001812-0000-1000-8000-00805f9b34fb"
-MAX_CONNECTED = 4
+MAX_CONNECTED = 7
 
 PASSKEY_RE = re.compile(r"Confirm passkey (\d{6})")
 DISPLAY_PASSKEY_RE = re.compile(r"Passkey: (\d{6})")
@@ -265,11 +265,6 @@ class BluetoothManager:
     async def _do_pair(self, mac):
         log.info(f"[PAIR] ========== START pair flow for {mac} ==========")
         self._pairing_state = {"mac": mac, "status": "starting"}
-
-        # Check device limit
-        paired = await self.get_paired_devices()
-        if len(paired) >= MAX_CONNECTED:
-            return {"success": False, "message": f"Device limit reached ({MAX_CONNECTED}). Remove a device first."}
 
         # Clean stale state
         await self._run("remove", mac, timeout=5)
