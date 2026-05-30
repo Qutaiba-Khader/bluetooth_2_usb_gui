@@ -1,0 +1,14 @@
+[Unit]
+Description=Bluetooth-2-USB WebHID Config Daemon
+After=bluetooth_2_usb.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/opt/bluetooth_2_usb/bt_web/venv/bin/python /opt/bluetooth_2_usb/bt_web/webhid_daemon.py
+Restart=always
+RestartSec=3
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

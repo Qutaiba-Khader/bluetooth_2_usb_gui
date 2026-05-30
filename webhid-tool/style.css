@@ -347,6 +347,57 @@ body {
 
 .browser-warning p { font-size: 0.88rem; line-height: 1.5; }
 
+/* WiFi controls */
+.wifi-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.wifi-status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+#wifi-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.wifi-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wifi-input {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+}
+
+.wifi-input:focus { border-color: var(--accent); }
+.wifi-input::placeholder { color: rgba(255, 255, 255, 0.3); }
+
+.wifi-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.wifi-buttons .btn { flex: 1; justify-content: center; }
+
 /* Responsive */
 @media (max-width: 520px) {
   .info-grid { grid-template-columns: 1fr; }

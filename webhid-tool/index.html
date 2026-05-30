@@ -27,27 +27,55 @@
     </header>
 
     <main id="main-content">
-      <!-- Connect prompt (shown when not connected) -->
+      <!-- Connect prompt -->
       <div id="connect-view">
         <div id="browser-warning" class="browser-warning" style="display:none">
-          <p>WebHID is not supported in this browser. Please use <strong>Chrome 89+</strong> or <strong>Edge 89+</strong>.</p>
+          <p>WebHID is not supported in this browser. Use <strong>Chrome 89+</strong> or <strong>Edge 89+</strong>.</p>
         </div>
-
         <div class="connect-prompt">
           <svg viewBox="0 0 24 24" fill="currentColor" width="48" height="48" style="color:var(--accent)">
             <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 004.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
           </svg>
           <h2>Connect via USB</h2>
-          <p>Plug your Raspberry Pi into this computer via USB, then click Connect to manage Bluetooth devices through WebHID.</p>
-          <button id="connect-btn" class="btn btn-accent btn-lg" onclick="doConnect()">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95a2.2 2.2 0 004.4 0c0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/></svg>
-            Connect
-          </button>
+          <p>Plug your Raspberry Pi into this computer via USB, then click Connect.<br>No WiFi needed — manage Bluetooth devices directly over the USB cable.</p>
+          <button id="connect-btn" class="btn btn-accent btn-lg" onclick="doConnect()">Connect</button>
         </div>
       </div>
 
       <!-- Main UI (shown when connected) -->
       <div id="device-view" style="display:none">
+
+        <!-- WiFi Control -->
+        <section class="section">
+          <div class="section-head">
+            <h2>WiFi</h2>
+            <button class="btn btn-ghost btn-sm" onclick="refreshWifi()">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div class="card" id="wifi-card">
+            <div class="wifi-status-row">
+              <div class="wifi-status-left">
+                <span id="wifi-radio-dot" class="status-dot"></span>
+                <span id="wifi-radio-text">WiFi Off</span>
+              </div>
+              <div id="wifi-info" style="display:none">
+                <span id="wifi-ssid-display"></span>
+                <span id="wifi-ip-display" style="font-family:monospace;font-size:0.78rem;opacity:0.7"></span>
+              </div>
+            </div>
+            <div class="wifi-controls">
+              <input type="text" id="wifi-ssid" class="wifi-input" placeholder="SSID (network name)">
+              <input type="password" id="wifi-pass" class="wifi-input" placeholder="Password">
+              <div class="wifi-buttons">
+                <button id="wifi-enable-btn" class="btn btn-success btn-sm" onclick="doWifiEnable()">Enable WiFi</button>
+                <button id="wifi-disable-btn" class="btn btn-danger btn-sm" onclick="doWifiDisable()">Disable WiFi</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Adapter Info -->
         <section class="section">
           <div class="section-head">
@@ -61,15 +89,13 @@
             <div class="info-item"><div class="info-label">Name</div><div class="info-value" id="adapter-name">--</div></div>
             <div class="info-item"><div class="info-label">Address</div><div class="info-value" id="adapter-addr">--</div></div>
             <div class="info-item"><div class="info-label">Power</div><div class="info-value" id="adapter-power">--</div></div>
-            <div class="info-item"><div class="info-label">Status</div><div class="info-value" id="adapter-status">--</div></div>
+            <div class="info-item"><div class="info-label">Devices</div><div class="info-value" id="adapter-devices">--</div></div>
           </div>
         </section>
 
         <!-- Paired Devices -->
         <section class="section">
-          <div class="section-head">
-            <h2>Paired Devices</h2>
-          </div>
+          <div class="section-head"><h2>Paired Devices</h2></div>
           <div id="paired-devices" class="device-list">
             <div class="empty">Loading...</div>
           </div>
@@ -89,7 +115,6 @@
           </div>
         </section>
 
-        <!-- Disconnect -->
         <section style="text-align:center;padding-top:8px">
           <button class="btn btn-ghost btn-sm" onclick="doDisconnect()">Disconnect USB</button>
         </section>
@@ -111,12 +136,12 @@
       <div id="passkey-code" class="passkey-display" style="display:none"></div>
       <div class="dialog-actions">
         <button class="btn btn-ghost" onclick="passkeyCancel()">Cancel</button>
-        <button class="btn btn-accent" id="passkey-confirm-btn" onclick="passkeyAccept()">Confirm</button>
+        <button class="btn btn-accent" onclick="passkeyAccept()">Confirm</button>
       </div>
     </div>
   </div>
 
-  <!-- Confirm remove dialog -->
+  <!-- Remove confirm -->
   <div id="remove-overlay" class="overlay hidden">
     <div class="dialog">
       <p id="remove-msg"></p>
@@ -133,17 +158,25 @@
     let scanning = false;
     let pendingPasskeyMac = null;
 
+    // --- Connect/Disconnect ---
+
     window.doConnect = async function () {
+      const btn = document.getElementById('connect-btn');
+      btn.disabled = true;
       try {
-        document.getElementById('connect-btn').disabled = true;
         await hid.connect();
+        hid.setOnDisconnect(() => {
+          showDeviceView(false);
+          toast('USB device disconnected', 'error');
+        });
         showDeviceView(true);
         toast('Connected to device', 'success');
         await refreshAll();
+        await refreshWifi();
       } catch (e) {
         toast('Connection failed: ' + e.message, 'error');
       } finally {
-        document.getElementById('connect-btn').disabled = false;
+        btn.disabled = false;
       }
     };
 
@@ -153,27 +186,26 @@
       toast('Disconnected', 'info');
     };
 
-    hid.onDisconnect = function () {
-      showDeviceView(false);
-      toast('USB device disconnected', 'error');
-    };
+    // --- Refresh ---
 
     window.refreshAll = async function () {
       if (!hid.isConnected()) return;
       try {
-        const [adapter, version] = await Promise.all([
+        const [adapter, version] = await Promise.allSettled([
           hid.getAdapterInfo(),
           hid.getVersion(),
         ]);
-        if (adapter) {
-          document.getElementById('adapter-name').textContent = adapter.name;
-          document.getElementById('adapter-addr').textContent = adapter.address;
-          document.getElementById('adapter-power').textContent = adapter.powered ? 'On' : 'Off';
-          document.getElementById('adapter-status').textContent = adapter.discovering ? 'Scanning' : 'Idle';
+        const a = adapter.status === 'fulfilled' ? adapter.value : null;
+        const v = version.status === 'fulfilled' ? version.value : null;
+        if (a) {
+          document.getElementById('adapter-name').textContent = a.name;
+          document.getElementById('adapter-addr').textContent = a.address;
+          document.getElementById('adapter-power').textContent = a.powered ? 'On' : 'Off';
+          document.getElementById('adapter-devices').textContent = a.connectedCount + ' / ' + a.maxConnected;
         }
-        if (version) {
+        if (v) {
           const vb = document.getElementById('version-badge');
-          vb.textContent = 'v' + version;
+          vb.textContent = 'v' + v;
           vb.style.display = '';
         }
         await loadPairedDevices();
@@ -181,6 +213,67 @@
         toast('Refresh failed: ' + e.message, 'error');
       }
     };
+
+    // --- WiFi ---
+
+    window.refreshWifi = async function () {
+      if (!hid.isConnected()) return;
+      try {
+        const w = await hid.getWifiStatus();
+        if (!w) return;
+        const dot = document.getElementById('wifi-radio-dot');
+        const text = document.getElementById('wifi-radio-text');
+        const info = document.getElementById('wifi-info');
+        dot.classList.toggle('connected', w.radioOn && w.connected);
+        if (w.radioOn) {
+          if (w.connected) {
+            text.textContent = 'Connected';
+            document.getElementById('wifi-ssid-display').textContent = w.ssid;
+            document.getElementById('wifi-ip-display').textContent = w.ip;
+            info.style.display = '';
+          } else {
+            text.textContent = 'WiFi On (not connected)';
+            info.style.display = 'none';
+          }
+        } else {
+          text.textContent = 'WiFi Off';
+          info.style.display = 'none';
+        }
+      } catch {}
+    };
+
+    window.doWifiEnable = async function () {
+      const ssid = document.getElementById('wifi-ssid').value.trim();
+      const pass = document.getElementById('wifi-pass').value;
+      document.getElementById('wifi-enable-btn').disabled = true;
+      toast(ssid ? 'Enabling WiFi and connecting to ' + ssid + '...' : 'Enabling WiFi...', 'info');
+      try {
+        const r = await hid.enableWifi(ssid, pass);
+        if (r.status === hid.STATUS.OK) {
+          toast('WiFi enabled' + (ssid ? ' — connected to ' + ssid : ''), 'success');
+        } else {
+          const msg = parseErrorData(r.data);
+          toast('WiFi failed: ' + msg, 'error');
+        }
+        await refreshWifi();
+      } catch (e) {
+        toast('WiFi enable failed: ' + e.message, 'error');
+      } finally {
+        document.getElementById('wifi-enable-btn').disabled = false;
+      }
+    };
+
+    window.doWifiDisable = async function () {
+      try {
+        await hid.disableWifi();
+        toast('WiFi disabled', 'info');
+        await refreshWifi();
+      } catch (e) {
+        toast('WiFi disable failed: ' + e.message, 'error');
+      }
+    };
+
+    // --- Devices ---
 
     async function loadPairedDevices() {
       const el = document.getElementById('paired-devices');
@@ -191,7 +284,7 @@
         } else {
           el.innerHTML = devices.map(d => deviceRow(d, true)).join('');
         }
-      } catch (e) {
+      } catch {
         el.innerHTML = '<div class="empty">Failed to load devices</div>';
       }
     }
@@ -203,7 +296,7 @@
       scanning = true;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Scanning...';
-      el.innerHTML = '<div class="scanning-indicator"><div class="scan-dots"><span></span><span></span><span></span></div> Scanning for devices...</div>';
+      el.innerHTML = '<div class="scanning-indicator"><div class="scan-dots"><span></span><span></span><span></span></div> Scanning... (~8 seconds)</div>';
       try {
         await hid.startScan();
         await new Promise(r => setTimeout(r, 8000));
@@ -232,16 +325,11 @@
         if (r.status === hid.STATUS.OK) {
           toast('Paired!', 'success');
           await refreshAll();
-        } else if (r.status === hid.STATUS.PASSKEY_DISPLAY) {
-          let code = '';
-          for (let i = 0; i < r.data.length && r.data[i] !== 0; i++) code += String.fromCharCode(r.data[i]);
-          showPasskeyDialog(mac, code);
-        } else if (r.status === hid.STATUS.PASSKEY_CONFIRM) {
-          let code = '';
-          for (let i = 0; i < r.data.length && r.data[i] !== 0; i++) code += String.fromCharCode(r.data[i]);
+        } else if (r.status === hid.STATUS.PASSKEY_DISPLAY || r.status === hid.STATUS.PASSKEY_CONFIRM) {
+          const code = parseErrorData(r.data);
           showPasskeyDialog(mac, code);
         } else {
-          toast('Pairing failed', 'error');
+          toast('Pairing failed: ' + parseErrorData(r.data), 'error');
         }
       } catch (e) {
         toast('Pairing failed: ' + e.message, 'error');
@@ -253,9 +341,7 @@
         const r = await hid.connectDevice(mac);
         toast(r.status === hid.STATUS.OK ? 'Connected' : 'Failed', r.status === hid.STATUS.OK ? 'success' : 'error');
         await loadPairedDevices();
-      } catch (e) {
-        toast('Connect failed: ' + e.message, 'error');
-      }
+      } catch (e) { toast('Connect failed: ' + e.message, 'error'); }
     };
 
     window.doDisconnectDev = async function (mac) {
@@ -263,17 +349,14 @@
         await hid.disconnectDevice(mac);
         toast('Disconnected', 'info');
         await loadPairedDevices();
-      } catch (e) {
-        toast('Disconnect failed: ' + e.message, 'error');
-      }
+      } catch (e) { toast('Disconnect failed: ' + e.message, 'error'); }
     };
 
     window.confirmRemove = function (mac, name) {
-      document.getElementById('remove-msg').textContent = 'Remove "' + name + '"? This will unpair and forget the device.';
+      document.getElementById('remove-msg').textContent = 'Remove "' + name + '"?';
       document.getElementById('remove-yes').onclick = () => doRemove(mac);
       document.getElementById('remove-overlay').classList.remove('hidden');
     };
-
     window.closeRemoveDialog = function () {
       document.getElementById('remove-overlay').classList.add('hidden');
     };
@@ -284,14 +367,14 @@
         await hid.unpairDevice(mac);
         toast('Device removed', 'info');
         await loadPairedDevices();
-      } catch (e) {
-        toast('Remove failed: ' + e.message, 'error');
-      }
+      } catch (e) { toast('Remove failed: ' + e.message, 'error'); }
     }
+
+    // --- Passkey ---
 
     function showPasskeyDialog(mac, code) {
       pendingPasskeyMac = mac;
-      document.getElementById('passkey-msg').textContent = 'Confirm this passkey matches the one shown on the device:';
+      document.getElementById('passkey-msg').textContent = 'Confirm this passkey matches the one on the device:';
       document.getElementById('passkey-code').textContent = code;
       document.getElementById('passkey-code').style.display = '';
       document.getElementById('passkey-overlay').classList.remove('hidden');
@@ -312,9 +395,10 @@
       if (pendingPasskeyMac) {
         await hid.confirmPair(pendingPasskeyMac, false);
         pendingPasskeyMac = null;
-        toast('Pairing cancelled', 'info');
       }
     };
+
+    // --- Helpers ---
 
     function deviceRow(dev, isPaired) {
       let actions = '';
@@ -343,16 +427,18 @@
         </div>`;
     }
 
+    function parseErrorData(data) {
+      let s = '';
+      for (let i = 0; i < data.length && data[i] !== 0; i++) s += String.fromCharCode(data[i]);
+      return s || 'Unknown error';
+    }
+
     function showDeviceView(show) {
       document.getElementById('connect-view').style.display = show ? 'none' : '';
       document.getElementById('device-view').style.display = show ? '' : 'none';
-      const dot = document.getElementById('status-dot');
-      const text = document.getElementById('status-text');
-      dot.classList.toggle('connected', show);
-      text.textContent = show ? 'Connected' : 'Disconnected';
-      if (!show) {
-        document.getElementById('version-badge').style.display = 'none';
-      }
+      document.getElementById('status-dot').classList.toggle('connected', show);
+      document.getElementById('status-text').textContent = show ? 'Connected' : 'Disconnected';
+      if (!show) document.getElementById('version-badge').style.display = 'none';
     }
 
     function toast(msg, type) {
@@ -367,25 +453,6 @@
     if (!hid.isSupported()) {
       document.getElementById('browser-warning').style.display = '';
       document.getElementById('connect-btn').disabled = true;
-    }
-
-    // Reconnect to already-paired devices on page load
-    if (hid.isSupported()) {
-      navigator.hid.getDevices().then(async (devices) => {
-        const dev = devices.find(d => d.vendorId === 0x1d6b && d.productId === 0x0104);
-        if (dev) {
-          try {
-            await dev.open();
-            // Verify it has the vendor usage page collection
-            const hasConfig = dev.collections.some(c => c.usagePage === 0xff00);
-            if (hasConfig) {
-              // Re-import and set device
-              const mod = await import('./webhid.js');
-              // Direct assignment not possible via module export, use connect flow
-            }
-          } catch {}
-        }
-      });
     }
   </script>
 </body>

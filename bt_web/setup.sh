@@ -11,6 +11,7 @@ echo "[+] Copying application files..."
 cp "$SCRIPT_DIR/main.py" "$DIR/"
 cp "$SCRIPT_DIR/bt_manager.py" "$DIR/"
 cp "$SCRIPT_DIR/net_manager.py" "$DIR/"
+cp "$SCRIPT_DIR/webhid_daemon.py" "$DIR/"
 cp "$SCRIPT_DIR/static/index.html" "$DIR/static/"
 cp "$SCRIPT_DIR/static/style.css" "$DIR/static/"
 cp "$SCRIPT_DIR/static/app.js" "$DIR/static/"
@@ -21,8 +22,10 @@ python3 -m venv "$DIR/venv"
 echo "[+] Installing dependencies..."
 "$DIR/venv/bin/pip" install --quiet fastapi uvicorn[standard]
 
-echo "[+] Installing bt-web service..."
+echo "[+] Installing services..."
 cp "$SCRIPT_DIR/bt-web.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/bt2usb-webhid.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/bt2usb-wifi-off.service" /etc/systemd/system/
 
 echo "[+] Setting up fallback WiFi AP..."
 nmcli connection show bt2usb-hotspot >/dev/null 2>&1 || \
@@ -63,13 +66,33 @@ systemctl disable --now NetworkManager-wait-online.service e2scrub_reap.service 
   udisks2.service man-db.timer dpkg-db-backup.timer \
   keyboard-setup.service console-setup.service 2>/dev/null || true
 
+echo "[+] Installing gadget descriptor updates..."
+VENV_DESC="/opt/bluetooth_2_usb/venv/lib/python3.*/site-packages/bluetooth_2_usb/hid/descriptors.py"
+VENV_LAYOUT="/opt/bluetooth_2_usb/venv/lib/python3.*/site-packages/bluetooth_2_usb/gadgets/layout.py"
+VENV_CONST="/opt/bluetooth_2_usb/venv/lib/python3.*/site-packages/bluetooth_2_usb/hid/constants.py"
+for src_dest in \
+  "src/bluetooth_2_usb/hid/descriptors.py:$VENV_DESC" \
+  "src/bluetooth_2_usb/gadgets/layout.py:$VENV_LAYOUT" \
+  "src/bluetooth_2_usb/hid/constants.py:$VENV_CONST"; do
+  src="/opt/bluetooth_2_usb/$(echo "$src_dest" | cut -d: -f1)"
+  dest_glob="$(echo "$src_dest" | cut -d: -f2)"
+  for target in $dest_glob; do
+    if [ -f "$target" ] && [ -f "$src" ]; then
+      cp "$src" "$target"
+      rm -f "$(dirname "$target")/__pycache__/"*.pyc
+      echo "    Updated $target"
+    fi
+  done
+done
+
 echo "[+] Enabling services..."
 systemctl daemon-reload
-systemctl enable bt-web.service bt2usb-ap-fallback.service
+systemctl enable bt-web.service bt2usb-ap-fallback.service bt2usb-webhid.service bt2usb-wifi-off.service
 systemctl restart bt-web.service
+systemctl restart bt2usb-webhid.service 2>/dev/null || true
 
-IP=$(hostname -I | awk '{print $1}')
 echo ""
-echo "[+] Done! Web UI available at http://${IP}:8080"
-echo "[+] Fallback WiFi AP: SSID='Bluetooth To USB' Password='1111111111'"
-echo "[+] Reboot to apply all boot optimizations."
+echo "[+] Done!"
+echo "[+] WebHID tool: https://qutaiba-khader.github.io/bluetooth_2_usb_gui/"
+echo "[+] WiFi is disabled by default. Use WebHID tool to enable when needed."
+echo "[+] Reboot to apply all changes."

@@ -1,0 +1,12 @@
+[Unit]
+Description=Disable WiFi on boot (WebHID manages WiFi)
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nmcli radio wifi off
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -17,8 +17,10 @@ const CMD = {
   CONNECT: 0x09,
   DISCONNECT: 0x0a,
   GET_ADAPTER_INFO: 0x0b,
-  CLEAR_BONDS: 0x0c,
   GET_VERSION: 0x0d,
+  WIFI_STATUS: 0x10,
+  WIFI_ENABLE: 0x11,
+  WIFI_DISABLE: 0x12,
 };
 
 const STATUS = {
@@ -30,29 +32,13 @@ const STATUS = {
   PASSKEY_CONFIRM: 0x05,
 };
 
-const DEV_TYPE = {
-  0: "device",
-  1: "keyboard",
-  2: "mouse",
-  3: "gamepad",
-  4: "audio",
-  5: "combo",
-};
-
-const DEV_ICON = {
-  keyboard: "⌨️",
-  mouse: "🖱️",
-  gamepad: "🎮",
-  audio: "🎧",
-  combo: "🔀",
-  device: "📡",
-};
+const DEV_TYPE = { 0: "device", 1: "keyboard", 2: "mouse", 3: "gamepad", 4: "audio", 5: "combo" };
+const DEV_ICON = { keyboard: "⌨️", mouse: "🖱️", gamepad: "🎮", audio: "🎧", combo: "🔀", device: "📡" };
 
 let hidDevice = null;
+let pendingResolve = null;
 
-function isSupported() {
-  return "hid" in navigator;
-}
+function isSupported() { return "hid" in navigator; }
 
 async function connect() {
   const filters = [{ vendorId: VID, productId: PID, usagePage: USAGE_PAGE }];
@@ -60,22 +46,41 @@ async function connect() {
   if (!device) throw new Error("No device selected");
   await device.open();
   hidDevice = device;
+  hidDevice.addEventListener("inputreport", onInputReport);
   hidDevice.addEventListener("disconnect", () => {
     hidDevice = null;
-    onDisconnect();
+    pendingResolve = null;
+    if (typeof onDisconnectCb === "function") onDisconnectCb();
   });
   return device;
 }
 
 function disconnect() {
   if (hidDevice) {
+    hidDevice.removeEventListener("inputreport", onInputReport);
     hidDevice.close();
     hidDevice = null;
   }
+  pendingResolve = null;
 }
 
-function isConnected() {
-  return hidDevice !== null && hidDevice.opened;
+function isConnected() { return hidDevice !== null && hidDevice.opened; }
+
+function onInputReport(event) {
+  if (event.reportId !== REPORT_ID_RSP) return;
+  const view = event.data;
+  const response = {
+    status: view.getUint8(0),
+    cmdEcho: view.getUint8(1),
+    seq: view.getUint8(2),
+    total: view.getUint8(3),
+    data: new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4),
+  };
+  if (pendingResolve) {
+    const resolve = pendingResolve;
+    pendingResolve = null;
+    resolve(response);
+  }
 }
 
 async function sendCommand(cmd, payload = []) {
@@ -85,20 +90,29 @@ async function sendCommand(cmd, payload = []) {
   for (let i = 0; i < payload.length && i < REPORT_SIZE - 1; i++) {
     data[i + 1] = payload[i];
   }
-  await hidDevice.sendFeatureReport(REPORT_ID_CMD, data);
-  const response = await hidDevice.receiveFeatureReport(REPORT_ID_RSP);
-  return parseResponse(response);
+  const responsePromise = new Promise((resolve, reject) => {
+    pendingResolve = resolve;
+    setTimeout(() => {
+      if (pendingResolve === resolve) {
+        pendingResolve = null;
+        reject(new Error("Response timeout"));
+      }
+    }, 30000);
+  });
+  await hidDevice.sendReport(REPORT_ID_CMD, data);
+  return responsePromise;
 }
 
-function parseResponse(report) {
-  const view = report.data;
-  return {
-    status: view.getUint8(0),
-    cmdEcho: view.getUint8(1),
-    seq: view.getUint8(2),
-    total: view.getUint8(3),
-    data: new Uint8Array(view.buffer, view.byteOffset + 4, view.byteLength - 4),
-  };
+async function waitForResponse(timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    pendingResolve = resolve;
+    setTimeout(() => {
+      if (pendingResolve === resolve) {
+        pendingResolve = null;
+        reject(new Error("Response timeout"));
+      }
+    }, timeoutMs);
+  });
 }
 
 function parseMac(bytes, offset) {
@@ -111,19 +125,23 @@ function macToBytes(mac) {
   return mac.split(":").map((h) => parseInt(h, 16));
 }
 
+function parseString(data, offset, length) {
+  let s = "";
+  for (let i = 0; i < length; i++) {
+    if (data[offset + i] === 0) break;
+    s += String.fromCharCode(data[offset + i]);
+  }
+  return s;
+}
+
 function parseDeviceEntry(data, offset) {
   const mac = parseMac(data, offset);
-  const addrType = data[offset + 6];
   const flags = data[offset + 7];
   const typeCode = data[offset + 8];
-  let name = "";
-  for (let i = 0; i < 23; i++) {
-    if (data[offset + 9 + i] === 0) break;
-    name += String.fromCharCode(data[offset + 9 + i]);
-  }
+  const name = parseString(data, offset + 9, 23);
   return {
     mac,
-    addrType,
+    addrType: data[offset + 6],
     paired: !!(flags & 1),
     trusted: !!(flags & 2),
     connected: !!(flags & 4),
@@ -137,23 +155,18 @@ function parseDeviceEntry(data, offset) {
 async function getVersion() {
   const r = await sendCommand(CMD.GET_VERSION);
   if (r.status !== STATUS.OK) return null;
-  let ver = "";
-  for (let i = 0; i < r.data.length && r.data[i] !== 0; i++) ver += String.fromCharCode(r.data[i]);
-  return ver;
+  return parseString(r.data, 0, r.data.length);
 }
 
 async function getAdapterInfo() {
   const r = await sendCommand(CMD.GET_ADAPTER_INFO);
   if (r.status !== STATUS.OK) return null;
-  const powered = !!(r.data[0] & 1);
-  const discovering = !!(r.data[0] & 2);
-  let name = "";
-  for (let i = 7; i < r.data.length && r.data[i] !== 0; i++) name += String.fromCharCode(r.data[i]);
   return {
-    powered,
-    discovering,
+    powered: !!(r.data[0] & 1),
     address: parseMac(r.data, 1),
-    name: name || "hci0",
+    connectedCount: r.data[7],
+    maxConnected: r.data[8],
+    name: parseString(r.data, 9, 50),
   };
 }
 
@@ -162,33 +175,24 @@ async function getDeviceList() {
   let page = 0;
   while (true) {
     const r = await sendCommand(CMD.GET_DEVICE_LIST, [page]);
-    if (r.status !== STATUS.OK) break;
-    if (r.data.length >= 32) {
-      devices.push(parseDeviceEntry(r.data, 0));
-    }
+    if (r.status !== STATUS.OK || r.total === 0) break;
+    if (r.data.length >= 32) devices.push(parseDeviceEntry(r.data, 0));
     if (r.seq >= r.total - 1) break;
     page++;
   }
   return devices;
 }
 
-async function startScan() {
-  return sendCommand(CMD.SCAN_START);
-}
-
-async function stopScan() {
-  return sendCommand(CMD.SCAN_STOP);
-}
+async function startScan() { return sendCommand(CMD.SCAN_START); }
+async function stopScan() { return sendCommand(CMD.SCAN_STOP); }
 
 async function getScanResults() {
   const devices = [];
   let page = 0;
   while (true) {
     const r = await sendCommand(CMD.SCAN_RESULTS, [page]);
-    if (r.status !== STATUS.OK) break;
-    if (r.data.length >= 32) {
-      devices.push(parseDeviceEntry(r.data, 0));
-    }
+    if (r.status !== STATUS.OK || r.total === 0) break;
+    if (r.data.length >= 32) devices.push(parseDeviceEntry(r.data, 0));
     if (r.seq >= r.total - 1) break;
     page++;
   }
@@ -196,7 +200,11 @@ async function getScanResults() {
 }
 
 async function pairDevice(mac, addrType = 0) {
-  return sendCommand(CMD.PAIR_DEVICE, [...macToBytes(mac), addrType]);
+  const r = await sendCommand(CMD.PAIR_DEVICE, [...macToBytes(mac), addrType]);
+  if (r.status === STATUS.BUSY) {
+    return waitForResponse(45000);
+  }
+  return r;
 }
 
 async function confirmPair(mac, accept) {
@@ -215,26 +223,40 @@ async function disconnectDevice(mac) {
   return sendCommand(CMD.DISCONNECT, macToBytes(mac));
 }
 
-function onDisconnect() {}
+async function getWifiStatus() {
+  const r = await sendCommand(CMD.WIFI_STATUS);
+  if (r.status !== STATUS.OK) return null;
+  return {
+    radioOn: !!r.data[0],
+    connected: !!r.data[1],
+    ssid: parseString(r.data, 2, 30),
+    ip: parseString(r.data, 32, 20),
+  };
+}
+
+async function enableWifi(ssid = "", password = "") {
+  const payload = new Uint8Array(63);
+  const ssidBytes = new TextEncoder().encode(ssid.slice(0, 30));
+  const passBytes = new TextEncoder().encode(password.slice(0, 31));
+  payload.set(ssidBytes, 0);
+  payload.set(passBytes, 31);
+  return sendCommand(CMD.WIFI_ENABLE, Array.from(payload));
+}
+
+async function disableWifi() {
+  return sendCommand(CMD.WIFI_DISABLE);
+}
+
+let onDisconnectCb = null;
+function setOnDisconnect(cb) { onDisconnectCb = cb; }
 
 export {
-  isSupported,
-  connect,
-  disconnect,
-  isConnected,
-  getVersion,
-  getAdapterInfo,
-  getDeviceList,
-  startScan,
-  stopScan,
-  getScanResults,
-  pairDevice,
-  confirmPair,
-  unpairDevice,
-  connectDevice,
-  disconnectDevice,
-  onDisconnect,
-  CMD,
-  STATUS,
-  DEV_ICON,
+  isSupported, connect, disconnect, isConnected,
+  getVersion, getAdapterInfo, getDeviceList,
+  startScan, stopScan, getScanResults,
+  pairDevice, confirmPair, unpairDevice,
+  connectDevice, disconnectDevice,
+  getWifiStatus, enableWifi, disableWifi,
+  setOnDisconnect,
+  CMD, STATUS, DEV_ICON,
 };
