@@ -39,6 +39,7 @@ CMD_GET_VERSION = 0x0D
 CMD_WIFI_STATUS = 0x10
 CMD_WIFI_ENABLE = 0x11
 CMD_WIFI_DISABLE = 0x12
+CMD_WIFI_HOTSPOT = 0x13
 
 STATUS_OK = 0x00
 STATUS_ERROR = 0x01
@@ -147,6 +148,7 @@ class ConfigDaemon:
                 CMD_WIFI_STATUS: self.cmd_wifi_status,
                 CMD_WIFI_ENABLE: self.cmd_wifi_enable,
                 CMD_WIFI_DISABLE: self.cmd_wifi_disable,
+                CMD_WIFI_HOTSPOT: self.cmd_wifi_hotspot,
             }
             handler = handlers.get(cmd)
             if handler:
@@ -319,6 +321,16 @@ class ConfigDaemon:
         log.info("WiFi disable")
         await self.net._run("radio", "wifi", "off")
         await self.send(self.make_response(STATUS_OK, cmd))
+
+    async def cmd_wifi_hotspot(self, cmd, payload):
+        log.info("WiFi hotspot start")
+        await self.net._run("radio", "wifi", "on")
+        await asyncio.sleep(1)
+        result = await self.net.start_hotspot()
+        if result.get("success"):
+            await self.send(self.make_response(STATUS_OK, cmd))
+        else:
+            await self.send(self.error_response(cmd, result.get("message", "Failed")[:59]))
 
     # --- Main loop ---
 

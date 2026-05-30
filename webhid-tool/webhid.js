@@ -21,6 +21,7 @@ const CMD = {
   WIFI_STATUS: 0x10,
   WIFI_ENABLE: 0x11,
   WIFI_DISABLE: 0x12,
+  WIFI_HOTSPOT: 0x13,
 };
 
 const STATUS = {
@@ -249,12 +250,16 @@ async function disableWifi() {
   return sendCommand(CMD.WIFI_DISABLE);
 }
 
+async function startHotspot() {
+  return sendCommand(CMD.WIFI_HOTSPOT);
+}
+
 export {
   isSupported, connect, disconnect, isConnected,
   getVersion, getAdapterInfo, getDeviceList,
   startScan, stopScan, getScanResults,
   pairDevice, confirmPair, unpairDevice,
   connectDevice, disconnectDevice,
-  getWifiStatus, enableWifi, disableWifi,
+  getWifiStatus, enableWifi, disableWifi, startHotspot,
   CMD, STATUS, DEV_ICON,
 };
