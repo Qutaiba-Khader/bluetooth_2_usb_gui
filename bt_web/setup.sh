@@ -29,8 +29,6 @@ echo "[+] Installing dependencies..."
 echo "[+] Installing services..."
 cp "$SCRIPT_DIR/bt-web.service" /etc/systemd/system/
 cp "$SCRIPT_DIR/bt2usb-webhid.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/bt2usb-wifi-off.service" /etc/systemd/system/
-
 echo "[+] Setting up fallback WiFi AP..."
 nmcli connection show bt2usb-hotspot >/dev/null 2>&1 || \
   nmcli connection add type wifi ifname wlan0 con-name "bt2usb-hotspot" \
@@ -91,12 +89,11 @@ done
 
 echo "[+] Enabling services..."
 systemctl daemon-reload
-systemctl enable bt-web.service bt2usb-ap-fallback.service bt2usb-webhid.service bt2usb-wifi-off.service
+systemctl enable bt-web.service bt2usb-ap-fallback.service bt2usb-webhid.service
 systemctl restart bt-web.service
 systemctl restart bt2usb-webhid.service 2>/dev/null || true
 
 echo ""
 echo "[+] Done!"
 echo "[+] WebHID tool: https://qutaiba-khader.github.io/bluetooth_2_usb_gui/"
-echo "[+] WiFi is disabled by default. Use WebHID tool to enable when needed."
 echo "[+] Reboot to apply all changes."
