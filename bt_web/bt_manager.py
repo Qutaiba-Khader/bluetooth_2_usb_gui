@@ -188,6 +188,8 @@ class BluetoothManager:
         log.info("[SCAN] Started interactive scan session")
 
     async def scan_stop(self):
+        # Get results BEFORE quitting bluetoothctl (quit clears device cache)
+        self._scan_cache = await self._collect_scan_results()
         if self._scan_proc:
             try:
                 self._scan_proc.stdin.write(b"scan off\nquit\n")
@@ -200,9 +202,9 @@ class BluetoothManager:
                 except Exception:
                     pass
             self._scan_proc = None
-        log.info("[SCAN] Stopped")
+        log.info(f"[SCAN] Stopped, cached {len(self._scan_cache)} devices")
 
-    async def scan_results(self):
+    async def _collect_scan_results(self):
         output = await self._run("devices")
         all_devices = self._parse_device_list(output)
         paired_output = await self._run("devices", "Paired")
@@ -222,6 +224,9 @@ class BluetoothManager:
                 d["supported"] = _is_hid_supported(dtype)
                 nearby.append(d)
         return nearby
+
+    async def scan_results(self):
+        return getattr(self, "_scan_cache", [])
 
     async def scan(self, duration=8):
         await self.scan_start()
