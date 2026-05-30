@@ -380,6 +380,14 @@ class ConfigDaemon:
         else:
             await self.send(self.error_response(cmd, result.get("message", "Failed")[:59]))
 
+    async def _background_scan(self):
+        try:
+            await asyncio.sleep(3)
+            log.info("Starting background BT scan")
+            await self.bt.scan_start()
+        except Exception as e:
+            log.warning(f"Background scan failed: {e}")
+
     # --- Main loop ---
 
     async def run(self):
@@ -393,6 +401,7 @@ class ConfigDaemon:
                 await asyncio.sleep(5)
 
         log.info("WebHID config daemon running")
+        asyncio.create_task(self._background_scan())
         loop = asyncio.get_event_loop()
         while True:
             try:
